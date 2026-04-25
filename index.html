@@ -370,6 +370,14 @@
       </div>
     </div>
 
+    <!-- ORDERS (client) -->
+    <div class="page" id="page-orders">
+      <div class="section" style="padding-bottom:20px;">
+        <div class="section-title">Мои заказы</div>
+        <div id="client-orders-list"></div>
+      </div>
+    </div>
+
     <!-- ADMIN -->
     <div class="page" id="page-admin">
       <div id="admin-pass-screen" class="visible">
@@ -406,6 +414,11 @@
           <div class="action-text"><div class="at">Управление товарами</div><div class="as">Редактировать / удалять</div></div>
           <div class="arrow">›</div>
         </div>
+        <div class="action-card" onclick="showAdminOrders()">
+          <div class="action-icon blue">📋</div>
+          <div class="action-text"><div class="at">Заказы</div><div class="as">Просмотр и смена статуса</div></div>
+          <div class="arrow">›</div>
+        </div>
         <div class="action-card" onclick="adminLogout()">
           <div class="action-icon red">🚪</div>
           <div class="action-text"><div class="at">Выйти из панели</div><div class="as">Заблокировать доступ</div></div>
@@ -414,6 +427,10 @@
         <div class="section" id="adminProductList" style="padding-bottom:20px;">
           <div class="section-title">Товары</div>
           <div id="admin-prod-list"></div>
+        </div>
+        <div class="section" id="adminOrdersSection" style="display:none;">
+          <div class="section-title">Активные заказы</div>
+          <div id="admin-orders-list"></div>
         </div>
       </div>
     </div>
@@ -425,6 +442,7 @@
     <div class="nav-item" onclick="showPage('catalog')" id="nav-catalog"><div class="nav-icon">🔍</div><div class="nav-label">Каталог</div></div>
     <div class="nav-item" onclick="showPage('cart')" id="nav-cart"><div class="nav-icon">🛒</div><div class="nav-label">Корзина</div></div>
     <div class="nav-item" onclick="showPage('profile')" id="nav-profile"><div class="nav-icon">👤</div><div class="nav-label">Профиль</div></div>
+    <div class="nav-item" onclick="showPage('orders')" id="nav-orders"><div class="nav-icon">📋</div><div class="nav-label">Заказы</div></div>
     <div class="nav-item" onclick="showPage('admin')" id="nav-admin"><div class="nav-icon">⚙️</div><div class="nav-label">Админ</div></div>
   </div>
 </div>
@@ -611,6 +629,8 @@
 
 <script>
 const ADMIN_PASS = '1234';
+const API_BASE = 'https://smokelabbot-1.onrender.com'; // ← заменить на URL сервиса Render
+
 let adminUnlocked = false;
 let currentDetailProduct = null;
 let currentEditField = null;
@@ -674,6 +694,7 @@ function showPage(page) {
   if (page === 'catalog') renderCatalog();
   if (page === 'cart') renderCart();
   if (page === 'profile') renderProfile();
+  if (page === 'orders') loadClientOrders();
   if (page === 'admin') renderAdmin();
 }
 
@@ -849,7 +870,6 @@ function selectPay(method) {
 }
 
 function submitOrder() {
-  // Собираем товары
   const items = Object.keys(cart).map(id => {
     const p = products.find(x => x.id == id);
     if (!p) return null;
@@ -867,7 +887,6 @@ function submitOrder() {
     customer: checkoutData
   };
 
-  // Отправляем в бота
   if (window.Telegram?.WebApp?.sendData) {
     try {
       window.Telegram.WebApp.sendData(JSON.stringify(orderPayload));
@@ -877,18 +896,15 @@ function submitOrder() {
       return;
     }
   } else {
-    // Для тестирования в браузере показываем alert
     alert('Заказ оформлен! (Telegram не обнаружен)');
     showToast('Заказ оформлен (симуляция)');
   }
 
-  // Сохраняем профиль
   profile.name = checkoutData.name;
   profile.phone = checkoutData.phone;
   profile.address = checkoutData.address;
   saveProfile();
 
-  // Показываем экран успеха (без номера заказа, бот пришлёт его отдельно)
   document.getElementById('orderNumDisplay').textContent = 'Оформлен';
   setCheckoutStep(3);
   cart = {};
@@ -964,6 +980,8 @@ function adminLogout() { adminUnlocked = false; renderAdmin(); }
 
 function showAdminProducts() {
   const el = document.getElementById('admin-prod-list');
+  document.getElementById('adminProductList').style.display = 'block';
+  document.getElementById('adminOrdersSection').style.display = 'none';
   if (!products.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Нет товаров</div></div>';
     return;
@@ -984,6 +1002,99 @@ function showAdminProducts() {
     </div>
   `).join('');
   document.getElementById('statProducts').textContent = products.length;
+}
+
+// ─── CLIENT ORDERS ─────────────────────────────────────────────────────────
+async function loadClientOrders() {
+  const el = document.getElementById('client-orders-list');
+  const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (!tg) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">Откройте через Telegram</div></div>';
+    return;
+  }
+  try {
+    const resp = await fetch(`${API_BASE}/api/orders?user_id=${tg.id}`);
+    const orders = await resp.json();
+    if (!orders.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">У вас пока нет заказов</div></div>';
+      return;
+    }
+    const icons = {"pending":"⏳","accepted":"✅","shipping":"🚚","done":"✔️","cancelled":"❌"};
+    let html = '';
+    orders.forEach(o => {
+      html += `<div class="cart-item">
+        <div style="flex:1">
+          <div class="prod-name">${o.order_num} – ${o.total} BYN</div>
+          <div class="prod-desc">${o.created_at} · ${icons[o.status] || '⏳'}</div>
+        </div>
+      </div>`;
+    });
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">Ошибка загрузки</div></div>';
+  }
+}
+
+// ─── ADMIN ORDERS MANAGEMENT ──────────────────────────────────────────────
+async function showAdminOrders() {
+  document.getElementById('adminProductList').style.display = 'none';
+  document.getElementById('adminOrdersSection').style.display = 'block';
+  const el = document.getElementById('admin-orders-list');
+  try {
+    const resp = await fetch(`${API_BASE}/api/orders`);
+    const orders = await resp.json();
+    const icons = {"pending":"⏳","accepted":"✅","shipping":"🚚","done":"✔️","cancelled":"❌"};
+    const statuses = [
+      {key:'accepted', label:'✅ Принять'},
+      {key:'shipping', label:'🚚 В путь'},
+      {key:'done', label:'✔️ Выполнен'},
+      {key:'cancelled', label:'❌ Отменить'}
+    ];
+    let html = '';
+    orders.forEach(o => {
+      html += `<div class="cart-item" style="flex-direction:column;align-items:flex-start;">
+        <div style="width:100%;display:flex;justify-content:space-between;">
+          <span><b>${o.order_num}</b> – ${o.total} BYN</span>
+          <span>${icons[o.status] || '⏳'}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin:8px 0;">
+          ${o.customer.name}, ${o.customer.phone}<br>
+          ${o.customer.address}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">`;
+      statuses.forEach(s => {
+        if (o.status === s.key) return;
+        html += `<button class="btn-secondary" style="font-size:11px;padding:6px 10px;width:auto;" onclick="changeOrderStatus('${o.order_num}','${s.key}')">${s.label}</button>`;
+      });
+      html += `</div></div>`;
+    });
+    el.innerHTML = html || '<div class="empty"><div class="empty-text">Нет активных заказов</div></div>';
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">Ошибка загрузки</div></div>';
+  }
+}
+
+async function changeOrderStatus(orderNum, newStatus) {
+  try {
+    const resp = await fetch(`${API_BASE}/api/orders/status`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        order_num: orderNum,
+        status: newStatus,
+        password: ADMIN_PASS
+      })
+    });
+    const result = await resp.json();
+    if (result.success) {
+      showToast('Статус обновлён');
+      showAdminOrders();
+    } else {
+      showToast('Ошибка: ' + (result.error || 'неизвестно'));
+    }
+  } catch(e) {
+    showToast('Ошибка соединения с сервером');
+  }
 }
 
 // ─── IMAGE UPLOAD ─────────────────────────────────────────────────────────────
@@ -1106,7 +1217,6 @@ function saveProduct() {
   const emoji = document.getElementById('prodEmoji').value.trim() || catIcons[cat];
   if (!name || isNaN(price) || price <= 0) { showToast('Заполните название и цену'); return; }
 
-  // Determine image
   let image = '';
   if (currentImgTab === 'upload' && uploadedImageBase64) {
     image = uploadedImageBase64;
