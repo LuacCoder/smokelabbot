@@ -80,7 +80,7 @@
   .prod-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.18s; }
   .prod-card:active { transform: scale(0.98); }
 
-  /* PRODUCT IMAGE — ключевой блок */
+  /* PRODUCT IMAGE */
   .prod-img {
     width: 64px; height: 64px; border-radius: 12px;
     background: var(--grad-soft);
@@ -245,15 +245,12 @@
   .login-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 8px; }
   .login-sub { font-size: 14px; color: var(--text-muted); text-align: center; margin-bottom: 30px; }
 
-  /* ADMIN IMAGE PREVIEW in list */
   .admin-prod-img { width: 48px; height: 48px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: var(--grad-soft); display: flex; align-items: center; justify-content: center; font-size: 22px; border: 0.5px solid var(--border); }
   .admin-prod-img img { width: 100%; height: 100%; object-fit: cover; }
 
-  /* TOAST */
   .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(30,30,50,0.95); backdrop-filter: blur(10px); border: 0.5px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 500; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
   .toast.show { opacity: 1; }
 
-  /* EMPTY */
   .empty { padding: 40px 20px; text-align: center; color: var(--text-muted); }
   .empty-icon { font-size: 48px; margin-bottom: 12px; }
   .empty-text { font-size: 15px; }
@@ -266,7 +263,6 @@
 </head>
 <body>
 <div id="app">
-  <!-- HEADER -->
   <div class="header">
     <div class="header-inner">
       <div class="logo">SMOKE<span>LAB</span></div>
@@ -370,14 +366,6 @@
       </div>
     </div>
 
-    <!-- ORDERS (client) -->
-    <div class="page" id="page-orders">
-      <div class="section" style="padding-bottom:20px;">
-        <div class="section-title">Мои заказы</div>
-        <div id="client-orders-list"></div>
-      </div>
-    </div>
-
     <!-- ADMIN -->
     <div class="page" id="page-admin">
       <div id="admin-pass-screen" class="visible">
@@ -414,11 +402,6 @@
           <div class="action-text"><div class="at">Управление товарами</div><div class="as">Редактировать / удалять</div></div>
           <div class="arrow">›</div>
         </div>
-        <div class="action-card" onclick="showAdminOrders()">
-          <div class="action-icon blue">📋</div>
-          <div class="action-text"><div class="at">Заказы</div><div class="as">Просмотр и смена статуса</div></div>
-          <div class="arrow">›</div>
-        </div>
         <div class="action-card" onclick="adminLogout()">
           <div class="action-icon red">🚪</div>
           <div class="action-text"><div class="at">Выйти из панели</div><div class="as">Заблокировать доступ</div></div>
@@ -427,10 +410,6 @@
         <div class="section" id="adminProductList" style="padding-bottom:20px;">
           <div class="section-title">Товары</div>
           <div id="admin-prod-list"></div>
-        </div>
-        <div class="section" id="adminOrdersSection" style="display:none;">
-          <div class="section-title">Активные заказы</div>
-          <div id="admin-orders-list"></div>
         </div>
       </div>
     </div>
@@ -442,7 +421,6 @@
     <div class="nav-item" onclick="showPage('catalog')" id="nav-catalog"><div class="nav-icon">🔍</div><div class="nav-label">Каталог</div></div>
     <div class="nav-item" onclick="showPage('cart')" id="nav-cart"><div class="nav-icon">🛒</div><div class="nav-label">Корзина</div></div>
     <div class="nav-item" onclick="showPage('profile')" id="nav-profile"><div class="nav-icon">👤</div><div class="nav-label">Профиль</div></div>
-    <div class="nav-item" onclick="showPage('orders')" id="nav-orders"><div class="nav-icon">📋</div><div class="nav-label">Заказы</div></div>
     <div class="nav-item" onclick="showPage('admin')" id="nav-admin"><div class="nav-icon">⚙️</div><div class="nav-label">Админ</div></div>
   </div>
 </div>
@@ -566,7 +544,10 @@
       </div>
       <div class="input-group">
         <label class="input-label">Адрес доставки</label>
-        <input class="inp" id="coAddress" placeholder="г. Минск, ул. Ленина 1, кв. 5">
+        <input class="inp" id="coAddress" placeholder="г. Минск, ул. Ленина 1, кв. 5" oninput="updateMapLink()">
+        <div style="margin-top:6px;">
+          <a href="#" id="mapLink" target="_blank" style="font-size:12px;color:var(--accent2);text-decoration:none;">🗺 Выбрать на карте</a>
+        </div>
       </div>
       <div class="input-group">
         <label class="input-label">Комментарий к заказу (необязательно)</label>
@@ -596,8 +577,18 @@
         <div class="pay-radio"></div>
         <div><div class="pay-label">₿ Криптовалюта</div><div class="pay-sub">USDT, BTC, ETH</div></div>
       </div>
+      <div class="pay-option" id="payOpt-pickup" onclick="selectPay('pickup')">
+        <div class="pay-radio"></div>
+        <div>
+          <div class="pay-label">🏪 Самовывоз</div>
+          <div class="pay-sub">Забрать из магазина</div>
+          <div style="margin-top:8px; padding:8px; background:var(--surface); border-radius:8px;">
+            <div style="font-size:12px; color:var(--text-muted);">📍 Беларусь, г. Витебск, ул. Генерала Ивановского, д. 34</div>
+            <a href="https://www.google.com/maps/search/?api=1&query=Витебск+ул.+Генерала+Ивановского+34" target="_blank" style="font-size:12px;color:var(--accent2);text-decoration:none;">🗺 Показать на карте</a>
+          </div>
+        </div>
+      </div>
 
-      <!-- Сводка заказа -->
       <div style="margin-top:16px;">
         <div class="input-label" style="margin-bottom:8px;">Ваш заказ:</div>
         <div class="checkout-summary" id="checkoutSummary"></div>
@@ -629,8 +620,6 @@
 
 <script>
 const ADMIN_PASS = '1234';
-const API_BASE = 'https://smokelabbot-1.onrender.com'; // ← заменить на URL сервиса Render
-
 let adminUnlocked = false;
 let currentDetailProduct = null;
 let currentEditField = null;
@@ -666,7 +655,6 @@ let profile = JSON.parse(localStorage.getItem('sl_profile') || '{}');
 function saveProducts() { localStorage.setItem('sl_products', JSON.stringify(products)); }
 function saveProfile() { localStorage.setItem('sl_profile', JSON.stringify(profile)); }
 
-// ─── PRODUCT IMAGE HELPER ─────────────────────────────────────────────────────
 function prodImgHTML(p, size='64px', fontSize='28px') {
   if (p.image) {
     return `<div class="prod-img" style="width:${size};height:${size};">
@@ -683,7 +671,6 @@ function prodModalImgHTML(p) {
   return `<div class="emoji-bg">${p.emoji || catIcons[p.cat]}</div>`;
 }
 
-// ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -694,11 +681,9 @@ function showPage(page) {
   if (page === 'catalog') renderCatalog();
   if (page === 'cart') renderCart();
   if (page === 'profile') renderProfile();
-  if (page === 'orders') loadClientOrders();
   if (page === 'admin') renderAdmin();
 }
 
-// ─── HOME ─────────────────────────────────────────────────────────────────────
 function renderHome() {
   const el = document.getElementById('home-products');
   el.innerHTML = products.slice(0,4).map(p => prodCardHTML(p)).join('');
@@ -724,7 +709,6 @@ function formatPrice(n) {
   return n.toFixed(2).replace('.', ',') + ' BYN';
 }
 
-// ─── CATALOG ──────────────────────────────────────────────────────────────────
 function renderCatalog() {
   const el = document.getElementById('catalog-products');
   const filtered = currentCatFilter === 'all' ? products : products.filter(p => p.cat === currentCatFilter);
@@ -750,7 +734,6 @@ function openCategory(cat) {
   showPage('catalog');
 }
 
-// ─── PRODUCT DETAIL ───────────────────────────────────────────────────────────
 function openProdDetail(id) {
   const p = products.find(x => x.id === id);
   if (!p) return;
@@ -767,7 +750,6 @@ function addToCartFromDetail() {
   closeModal('prodDetailModal');
 }
 
-// ─── CART ─────────────────────────────────────────────────────────────────────
 function addToCart(id) {
   cart[id] = (cart[id] || 0) + 1;
   updateCartCount();
@@ -820,14 +802,11 @@ function changeQty(id, delta) {
   renderCart();
 }
 
-// ─── CHECKOUT ─────────────────────────────────────────────────────────────────
 function openCheckout() {
-  // Prefill from profile
   document.getElementById('coName').value = profile.name || '';
   document.getElementById('coPhone').value = profile.phone || '';
   document.getElementById('coAddress').value = profile.address || '';
   document.getElementById('coComment').value = '';
-  // Reset to step 1
   setCheckoutStep(1);
   document.getElementById('checkoutModal').classList.add('show');
 }
@@ -845,7 +824,6 @@ function checkoutNext() {
   const address = document.getElementById('coAddress').value.trim();
   if (!name || !phone || !address) { showToast('Заполните все обязательные поля'); return; }
   checkoutData = { name, phone, address, comment: document.getElementById('coComment').value.trim() };
-  // Build summary
   let summaryHTML = '';
   let total = 0;
   Object.keys(cart).forEach(id => {
@@ -867,6 +845,25 @@ function selectPay(method) {
   selectedPayMethod = method;
   document.querySelectorAll('.pay-option').forEach(el => el.classList.remove('selected'));
   document.getElementById('payOpt-' + method).classList.add('selected');
+  if (method === 'pickup') {
+    document.getElementById('coAddress').value = 'Самовывоз, г. Витебск, ул. Генерала Ивановского, д. 34';
+    document.getElementById('coAddress').disabled = true;
+    document.getElementById('mapLink').style.display = 'none';
+  } else {
+    document.getElementById('coAddress').disabled = false;
+    updateMapLink();
+  }
+}
+
+function updateMapLink() {
+  const address = document.getElementById('coAddress').value.trim();
+  const link = document.getElementById('mapLink');
+  if (address) {
+    link.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    link.style.display = 'inline';
+  } else {
+    link.style.display = 'none';
+  }
 }
 
 function submitOrder() {
@@ -917,7 +914,6 @@ function closeCheckoutSuccess() {
   showPage('home');
 }
 
-// ─── PROFILE ──────────────────────────────────────────────────────────────────
 function renderProfile() {
   const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
   if (tg) {
@@ -951,7 +947,6 @@ function saveEdit() {
   showToast('Сохранено ✓');
 }
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────────
 function renderAdmin() {
   if (adminUnlocked) {
     document.getElementById('admin-pass-screen').classList.remove('visible');
@@ -980,8 +975,6 @@ function adminLogout() { adminUnlocked = false; renderAdmin(); }
 
 function showAdminProducts() {
   const el = document.getElementById('admin-prod-list');
-  document.getElementById('adminProductList').style.display = 'block';
-  document.getElementById('adminOrdersSection').style.display = 'none';
   if (!products.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Нет товаров</div></div>';
     return;
@@ -1004,100 +997,6 @@ function showAdminProducts() {
   document.getElementById('statProducts').textContent = products.length;
 }
 
-// ─── CLIENT ORDERS ─────────────────────────────────────────────────────────
-async function loadClientOrders() {
-  const el = document.getElementById('client-orders-list');
-  const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (!tg) {
-    el.innerHTML = '<div class="empty"><div class="empty-text">Откройте через Telegram</div></div>';
-    return;
-  }
-  try {
-    const resp = await fetch(`${API_BASE}/api/orders?user_id=${tg.id}`);
-    const orders = await resp.json();
-    if (!orders.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">У вас пока нет заказов</div></div>';
-      return;
-    }
-    const icons = {"pending":"⏳","accepted":"✅","shipping":"🚚","done":"✔️","cancelled":"❌"};
-    let html = '';
-    orders.forEach(o => {
-      html += `<div class="cart-item">
-        <div style="flex:1">
-          <div class="prod-name">${o.order_num} – ${o.total} BYN</div>
-          <div class="prod-desc">${o.created_at} · ${icons[o.status] || '⏳'}</div>
-        </div>
-      </div>`;
-    });
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="empty-text">Ошибка загрузки</div></div>';
-  }
-}
-
-// ─── ADMIN ORDERS MANAGEMENT ──────────────────────────────────────────────
-async function showAdminOrders() {
-  document.getElementById('adminProductList').style.display = 'none';
-  document.getElementById('adminOrdersSection').style.display = 'block';
-  const el = document.getElementById('admin-orders-list');
-  try {
-    const resp = await fetch(`${API_BASE}/api/orders`);
-    const orders = await resp.json();
-    const icons = {"pending":"⏳","accepted":"✅","shipping":"🚚","done":"✔️","cancelled":"❌"};
-    const statuses = [
-      {key:'accepted', label:'✅ Принять'},
-      {key:'shipping', label:'🚚 В путь'},
-      {key:'done', label:'✔️ Выполнен'},
-      {key:'cancelled', label:'❌ Отменить'}
-    ];
-    let html = '';
-    orders.forEach(o => {
-      html += `<div class="cart-item" style="flex-direction:column;align-items:flex-start;">
-        <div style="width:100%;display:flex;justify-content:space-between;">
-          <span><b>${o.order_num}</b> – ${o.total} BYN</span>
-          <span>${icons[o.status] || '⏳'}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-muted);margin:8px 0;">
-          ${o.customer.name}, ${o.customer.phone}<br>
-          ${o.customer.address}
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">`;
-      statuses.forEach(s => {
-        if (o.status === s.key) return;
-        html += `<button class="btn-secondary" style="font-size:11px;padding:6px 10px;width:auto;" onclick="changeOrderStatus('${o.order_num}','${s.key}')">${s.label}</button>`;
-      });
-      html += `</div></div>`;
-    });
-    el.innerHTML = html || '<div class="empty"><div class="empty-text">Нет активных заказов</div></div>';
-  } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="empty-text">Ошибка загрузки</div></div>';
-  }
-}
-
-async function changeOrderStatus(orderNum, newStatus) {
-  try {
-    const resp = await fetch(`${API_BASE}/api/orders/status`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        order_num: orderNum,
-        status: newStatus,
-        password: ADMIN_PASS
-      })
-    });
-    const result = await resp.json();
-    if (result.success) {
-      showToast('Статус обновлён');
-      showAdminOrders();
-    } else {
-      showToast('Ошибка: ' + (result.error || 'неизвестно'));
-    }
-  } catch(e) {
-    showToast('Ошибка соединения с сервером');
-  }
-}
-
-// ─── IMAGE UPLOAD ─────────────────────────────────────────────────────────────
 function switchImgTab(tab) {
   currentImgTab = tab;
   document.querySelectorAll('.img-tab').forEach((t, i) => {
@@ -1135,8 +1034,6 @@ function clearUploadedImage() {
   document.getElementById('imgFileInput').value = '';
 }
 
-// URL preview
-document.addEventListener('DOMContentLoaded', () => {});
 let urlPreviewTimer = null;
 function setupUrlPreview() {
   const inp = document.getElementById('prodImgUrl');
@@ -1154,7 +1051,6 @@ function setupUrlPreview() {
 }
 setupUrlPreview();
 
-// ─── PRODUCT CRUD ─────────────────────────────────────────────────────────────
 function openAddProduct() {
   document.getElementById('addProdTitle').textContent = 'Новый товар';
   document.getElementById('editProdId').value = '';
@@ -1183,7 +1079,6 @@ function openEditProduct(id) {
   clearUploadedImage();
 
   if (p.image && p.image.startsWith('data:')) {
-    // base64
     uploadedImageBase64 = p.image;
     const preview = document.getElementById('uploadPreview');
     preview.src = p.image;
@@ -1194,7 +1089,6 @@ function openEditProduct(id) {
     switchImgTab('upload');
     document.getElementById('prodImgUrl').value = '';
   } else if (p.image) {
-    // URL
     document.getElementById('prodImgUrl').value = p.image;
     const box = document.getElementById('urlPreviewBox');
     const img = document.getElementById('urlPreview');
@@ -1245,7 +1139,6 @@ function deleteProduct(id) {
   showToast('Товар удалён');
 }
 
-// ─── UTILS ────────────────────────────────────────────────────────────────────
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 function showToast(msg) {
@@ -1255,7 +1148,6 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-// ─── TELEGRAM INIT ────────────────────────────────────────────────────────────
 if (window.Telegram?.WebApp) {
   const tg = window.Telegram.WebApp;
   tg.ready();
