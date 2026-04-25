@@ -23,7 +23,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # Конфигурация
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8160958113"))
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")
 
@@ -65,6 +65,24 @@ def init_db():
             updated_at TEXT NOT NULL
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            first_name TEXT,
+            username TEXT,
+            last_active TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def add_user(user):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO users (user_id, first_name, username, last_active)
+        VALUES (?, ?, ?, datetime('now'))
+    """, (user.id, user.first_name, user.username))
     conn.commit()
     conn.close()
 
@@ -134,7 +152,7 @@ def get_next_order_number():
 def get_all_user_ids():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-    cur.execute("SELECT DISTINCT user_id FROM orders")
+    cur.execute("SELECT user_id FROM users")
     rows = cur.fetchall()
     conn.close()
     return [r[0] for r in rows]
@@ -175,6 +193,11 @@ STATUS_INFO = {
 def format_items(items):
     return "\n".join(f"  • {it['name']} × {it['qty']} = {it['price'] * it['qty']:.2f} BYN" for it in items)
 
+def build_address_link(address: str) -> str:
+    """Возвращает HTML-ссылку на Яндекс.Карты по адресу."""
+    encoded = address.replace(" ", "%20")
+    return f'<a href="https://yandex.ru/maps/?text={encoded}">{address}</a>'
+
 def user_order_text(order):
     items_text = format_items(order["items"])
     customer = order["customer"]
@@ -183,6 +206,7 @@ def user_order_text(order):
     status = STATUS_INFO.get(order["status"], "⏳ Ожидает")
     payment_label = PAY_LABELS.get(order["payment"], order["payment"])
     comment_line = f"💬 {customer['comment']}\n" if customer.get("comment") else ""
+    addr_str = build_address_link(customer.get("address", "—"))
     return (
         f"🎉 <b>Заказ {order['order_num']}</b>\n\n"
         f"<b>Состав:</b>\n{items_text}\n\n"
@@ -193,14 +217,36 @@ def user_order_text(order):
         f"<b>Доставка:</b>\n"
         f"👤 {customer.get('name','—')}\n"
         f"📱 {customer.get('phone','—')}\n"
-        f"🏠 {customer.get('address','—')}\n"
+        f"🏠 {addr_str}\n"
         f"{comment_line}\n"
         f"<b>Статус:</b> {status}"
+    )
+
+def admin_notification_text(order):
+    items_text = format_items(order["items"])
+    customer = order["customer"]
+    delivery_cost = order.get("delivery_cost", 0)
+    total = order["total"] + delivery_cost
+    payment_label = PAY_LABELS.get(order["payment"], order["payment"])
+    addr_str = build_address_link(customer.get("address", "—"))
+    return (
+        f"🔔 <b>НОВЫЙ ЗАКАЗ {order['order_num']}</b>\n"
+        f"🕐 {order['created_at']}\n\n"
+        f"<b>Клиент:</b> {order['full_name']} (ID: {order['user_id']})\n"
+        f"👤 {customer.get('name','—')}\n"
+        f"📱 {customer.get('phone','—')}\n"
+        f"🏠 {addr_str}\n"
+        f"<b>Товары:</b>\n{items_text}\n"
+        f"<b>Товары:</b> {order['total']:.2f} BYN\n"
+        f"<b>Доставка:</b> {delivery_cost:.2f} BYN\n"
+        f"<b>Итого:</b> {total:.2f} BYN\n"
+        f"<b>Оплата:</b> {payment_label}"
     )
 
 # --- Команды ---
 @dp.message(CommandStart())
 async def cmd_start(msg: Message):
+    add_user(msg.from_user)
     name = msg.from_user.first_name or "друг"
     await msg.answer(f"👋 Привет, <b>{name}</b>!\n\nДобро пожаловать в <b>SMOKELAB</b> — ваш вейп-магазин в Витебске.\nНажмите кнопку ниже, чтобы открыть каталог 👇", reply_markup=kb_main())
 
@@ -253,6 +299,8 @@ async def process_order(msg: Message, data: dict):
     user = msg.from_user
     now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
 
+    add_user(user)  # сохраняем пользователя для рассылки
+
     order_num = get_next_order_number()
     order_data = {
         "order_num": order_num,
@@ -280,18 +328,10 @@ async def process_order(msg: Message, data: dict):
 
     # Уведомление администратору
     if ADMIN_ID:
-        tg_ref = f"@{user.username}" if user.username else f"<a href='tg://user?id={user.id}'>{user.full_name}</a>"
         try:
             await bot.send_message(
                 ADMIN_ID,
-                f"🔔 <b>НОВЫЙ ЗАКАЗ {order_num}</b>\n🕐 {now_str}\n\n"
-                f"<b>Клиент:</b> {tg_ref} ({user.full_name})\n"
-                f"👤 {customer.get('name','—')}\n📱 {customer.get('phone','—')}\n🏠 {customer.get('address','—')}\n"
-                f"<b>Товары:</b>\n{format_items(items)}\n"
-                f"<b>Товары:</b> {total:.2f} BYN\n"
-                f"<b>Доставка:</b> {order_data['delivery_cost']:.2f} BYN\n"
-                f"<b>Итого:</b> {total + order_data['delivery_cost']:.2f} BYN\n"
-                f"<b>Оплата:</b> {PAY_LABELS.get(payment, payment)}",
+                admin_notification_text(order),
                 reply_markup=kb_admin_order(order_num),
             )
             log.info(f"Новый заказ {order_num} от пользователя {user.id}")
@@ -303,16 +343,19 @@ async def process_broadcast(msg: Message, data: dict):
         return
     text = data.get("text", "")
     if not text:
-        await msg.answer("Текст рассылки пуст.")
+        await bot.send_message(ADMIN_ID, "Текст рассылки пуст.")
         return
     user_ids = get_all_user_ids()
+    if not user_ids:
+        await bot.send_message(ADMIN_ID, "Нет пользователей для рассылки.")
+        return
     success = 0
     for uid in user_ids:
         try:
             await bot.send_message(uid, text)
             success += 1
-        except:
-            pass
+        except Exception as e:
+            log.warning(f"Не удалось отправить сообщение пользователю {uid}: {e}")
     await bot.send_message(ADMIN_ID, f"Рассылка завершена: {success}/{len(user_ids)} пользователей получили сообщение.")
 
 # --- Смена статуса (inline-кнопки) ---
@@ -331,7 +374,9 @@ async def handle_status(call: CallbackQuery):
         return
     update_order_status(order_num, new_status)
     updated_order = get_order(order_num)
-    # Обновляем сообщение пользователю
+
+    # Уведомление пользователю: сначала пробуем отредактировать, если не получается – отправляем новое
+    user_notified = False
     if updated_order["user_message_id"]:
         try:
             await bot.edit_message_text(
@@ -339,8 +384,15 @@ async def handle_status(call: CallbackQuery):
                 chat_id=updated_order["user_id"],
                 message_id=updated_order["user_message_id"]
             )
+            user_notified = True
         except Exception as e:
             log.warning("Не удалось отредактировать сообщение пользователю: %s", e)
+    if not user_notified:
+        try:
+            await bot.send_message(updated_order["user_id"], user_order_text(updated_order))
+        except Exception as e:
+            log.error("Не удалось уведомить пользователя: %s", e)
+
     # Обновляем сообщение админу (убираем кнопки для финальных статусов)
     final_statuses = ["done", "cancelled"]
     reply_markup = None if new_status in final_statuses else call.message.reply_markup
@@ -368,6 +420,9 @@ async def cmd_broadcast(msg: Message):
             await m.answer("Отменено.")
             return
         user_ids = get_all_user_ids()
+        if not user_ids:
+            await m.answer("Нет пользователей.")
+            return
         ok = 0
         for uid in user_ids:
             try:
