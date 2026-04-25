@@ -73,14 +73,7 @@
   .prod-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.18s; }
   .prod-card:active { transform: scale(0.98); }
 
-  .prod-img {
-    width: 64px; height: 64px; border-radius: 12px;
-    background: var(--grad-soft);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 28px; flex-shrink: 0;
-    border: 0.5px solid var(--border);
-    overflow: hidden; position: relative;
-  }
+  .prod-img { width: 64px; height: 64px; border-radius: 12px; background: var(--grad-soft); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; border: 0.5px solid var(--border); overflow: hidden; position: relative; }
   .prod-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
   .prod-img .emoji-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--grad-soft); }
 
@@ -243,11 +236,8 @@
       </div>
       <div class="section">
         <div class="section-title">Категории</div>
-        <div class="cat-grid">
-          <div class="cat-card" onclick="openCategory('vapes')"><span class="cat-icon">💨</span><div class="cat-name">Вейпы</div><div class="cat-count" id="cnt-vapes">0 товаров</div></div>
-          <div class="cat-card" onclick="openCategory('liquids')"><span class="cat-icon">🧪</span><div class="cat-name">Жидкости</div><div class="cat-count" id="cnt-liquids">0 товаров</div></div>
-          <div class="cat-card" onclick="openCategory('snus')"><span class="cat-icon">🍃</span><div class="cat-name">Снюс</div><div class="cat-count" id="cnt-snus">0 товаров</div></div>
-          <div class="cat-card" onclick="openCategory('accessories')"><span class="cat-icon">🔧</span><div class="cat-name">Расходники</div><div class="cat-count" id="cnt-accessories">0 товаров</div></div>
+        <div class="cat-grid" id="cat-grid">
+          <!-- динамически -->
         </div>
       </div>
       <div class="section" style="padding-bottom:20px;">
@@ -259,10 +249,7 @@
     <div class="page" id="page-catalog">
       <div class="cat-tabs" id="catTabs">
         <div class="cat-tab active" data-cat="all" onclick="filterCat(this,'all')">Все</div>
-        <div class="cat-tab" data-cat="vapes" onclick="filterCat(this,'vapes')">💨 Вейпы</div>
-        <div class="cat-tab" data-cat="liquids" onclick="filterCat(this,'liquids')">🧪 Жидкости</div>
-        <div class="cat-tab" data-cat="snus" onclick="filterCat(this,'snus')">🍃 Снюс</div>
-        <div class="cat-tab" data-cat="accessories" onclick="filterCat(this,'accessories')">🔧 Расходники</div>
+        <!-- динамические вкладки категорий -->
       </div>
       <div class="section" style="padding-bottom:20px;">
         <div class="prod-list" id="catalog-products"></div>
@@ -341,6 +328,14 @@
           <div class="stat-card"><div class="stat-num" id="statOrders">0</div><div class="stat-lbl">Заказов</div></div>
           <div class="stat-card"><div class="stat-num">BYN</div><div class="stat-lbl">Валюта</div></div>
         </div>
+
+        <!-- Управление категориями -->
+        <div class="section" style="padding:0 16px 12px;">
+          <div class="section-title" style="margin-bottom:8px;">📂 Категории</div>
+          <div id="admin-cat-list"></div>
+          <button class="btn-secondary" style="margin-top:8px;" onclick="openAddCategory()">➕ Добавить категорию</button>
+        </div>
+
         <div class="action-card" onclick="openAddProduct()">
           <div class="action-icon purple">➕</div>
           <div class="action-text"><div class="at">Добавить товар</div><div class="as">Создать новую позицию</div></div>
@@ -387,44 +382,83 @@
   </div>
 </div>
 
+<!-- ADD/EDIT CATEGORY MODAL -->
+<div class="modal-overlay" id="addCategoryModal" onclick="closeModal('addCategoryModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="addCatTitle">Новая категория</div>
+    <input type="hidden" id="editCatId" value="">
+    <div class="input-group">
+      <label class="input-label">Название категории</label>
+      <input class="inp" id="catName" placeholder="Например: Вейпы">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Ключ (латиница, для фильтрации)</label>
+      <input class="inp" id="catKey" placeholder="vapes">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Иконка (эмодзи)</label>
+      <input class="inp" id="catEmoji" placeholder="💨" maxlength="4">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Изображение иконки (вместо эмодзи)</label>
+      <div class="img-tabs">
+        <div class="img-tab active" onclick="switchImgTab('upload')">📤 Загрузить</div>
+        <div class="img-tab" onclick="switchImgTab('url')">🔗 По URL</div>
+      </div>
+      <div class="img-tab-content active" id="imgTabUpload">
+        <div class="img-upload-area" id="uploadAreaCat" onclick="document.getElementById('imgFileInputCat').click()">
+          <div class="upload-placeholder" id="uploadPlaceholderCat">
+            <div class="upload-icon">📷</div>
+            <div class="upload-text">Нажмите чтобы выбрать фото</div>
+            <div class="upload-text" style="font-size:10px;margin-top:2px;">JPG, PNG до 10MB</div>
+          </div>
+          <img id="uploadPreviewCat" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;" alt="">
+        </div>
+        <input type="file" id="imgFileInputCat" accept="image/*" style="display:none" onchange="handleFileUploadCat(event)">
+        <button class="btn-secondary" style="margin-top:6px;font-size:12px;padding:8px;" onclick="clearUploadedImageCat()" id="clearImgBtnCat" style="display:none;">✕ Удалить фото</button>
+      </div>
+      <div class="img-tab-content" id="imgTabUrl">
+        <input class="inp" id="catImgUrl" placeholder="https://example.com/icon.png">
+        <div id="urlPreviewBoxCat" style="margin-top:8px;display:none;">
+          <img id="urlPreviewCat" style="width:100%;height:100px;object-fit:cover;border-radius:10px;border:0.5px solid var(--border);" alt="">
+        </div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="saveCategory()">Сохранить категорию</button>
+    <button class="btn-secondary" onclick="closeModal('addCategoryModal')">Отмена</button>
+  </div>
+</div>
+
 <!-- ADD/EDIT PRODUCT MODAL -->
 <div class="modal-overlay" id="addProductModal" onclick="closeModal('addProductModal')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <div class="modal-title" id="addProdTitle">Новый товар</div>
     <input type="hidden" id="editProdId" value="">
-
     <div class="input-group"><label class="input-label">Название</label><input class="inp" id="prodName" placeholder="Например: ELFBAR 5000"></div>
     <div class="input-group"><label class="input-label">Описание</label><input class="inp" id="prodDesc" placeholder="Краткое описание товара"></div>
     <div class="input-group"><label class="input-label">Цена (BYN)</label><input class="inp" type="number" id="prodPrice" placeholder="0.00" step="0.01"></div>
-    <div class="input-group"><label class="input-label">Категория</label><select class="inp" id="prodCat">
-      <option value="vapes">💨 Вейпы</option>
-      <option value="liquids">🧪 Жидкости</option>
-      <option value="snus">🍃 Снюс</option>
-      <option value="accessories">🔧 Расходники</option>
-    </select></div>
+    <div class="input-group"><label class="input-label">Категория</label><select class="inp" id="prodCat"></select></div>
     <div class="input-group"><label class="input-label">Эмодзи (иконка, если нет фото)</label><input class="inp" id="prodEmoji" placeholder="💨" maxlength="4"></div>
-
     <div class="input-group">
       <label class="input-label">Фото товара</label>
       <div class="img-tabs">
         <div class="img-tab active" onclick="switchImgTab('upload')">📤 Загрузить</div>
         <div class="img-tab" onclick="switchImgTab('url')">🔗 По URL</div>
       </div>
-
       <div class="img-tab-content active" id="imgTabUpload">
         <div class="img-upload-area" id="uploadArea" onclick="document.getElementById('imgFileInput').click()">
           <div class="upload-placeholder" id="uploadPlaceholder">
             <div class="upload-icon">📷</div>
             <div class="upload-text">Нажмите чтобы выбрать фото</div>
-            <div class="upload-text" style="font-size:10px;margin-top:2px;">JPG, PNG до 2MB</div>
+            <div class="upload-text" style="font-size:10px;margin-top:2px;">JPG, PNG до 10MB</div>
           </div>
           <img id="uploadPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;" alt="">
         </div>
         <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
         <button class="btn-secondary" style="margin-top:6px;font-size:12px;padding:8px;" onclick="clearUploadedImage()" id="clearImgBtn" style="display:none;">✕ Удалить фото</button>
       </div>
-
       <div class="img-tab-content" id="imgTabUrl">
         <input class="inp" id="prodImgUrl" placeholder="https://example.com/image.jpg">
         <div id="urlPreviewBox" style="margin-top:8px;display:none;">
@@ -432,7 +466,6 @@
         </div>
       </div>
     </div>
-
     <button class="btn-primary" onclick="saveProduct()">Сохранить товар</button>
     <button class="btn-secondary" onclick="closeModal('addProductModal')">Отмена</button>
   </div>
@@ -455,96 +488,46 @@
 <div class="modal-overlay" id="checkoutModal" onclick="closeModal('checkoutModal')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-
     <div class="checkout-step active" id="checkoutStep1">
-      <div class="checkout-progress">
-        <div class="progress-dot done" id="dot1"></div>
-        <div class="progress-dot" id="dot2"></div>
-        <div class="progress-dot" id="dot3"></div>
-      </div>
+      <div class="checkout-progress"><div class="progress-dot done" id="dot1"></div><div class="progress-dot" id="dot2"></div><div class="progress-dot" id="dot3"></div></div>
       <div class="modal-title">📍 Способ получения</div>
-
       <div class="pay-option selected" id="deliveryOption-delivery" onclick="selectDelivery('delivery')">
-        <div class="pay-radio"></div>
-        <div><div class="pay-label">🚚 Доставка</div><div class="pay-sub">Курьером по вашему адресу</div></div>
+        <div class="pay-radio"></div><div><div class="pay-label">🚚 Доставка</div><div class="pay-sub">Курьером по вашему адресу</div></div>
       </div>
       <div class="pay-option" id="deliveryOption-pickup" onclick="selectDelivery('pickup')">
-        <div class="pay-radio"></div>
-        <div>
-          <div class="pay-label">🏪 Самовывоз</div>
-          <div class="pay-sub">Забрать из магазина</div>
-        </div>
+        <div class="pay-radio"></div><div><div class="pay-label">🏪 Самовывоз</div><div class="pay-sub">Забрать из магазина</div></div>
       </div>
-
       <div id="deliveryAddressBlock" style="margin-top:12px;">
         <div class="input-group">
           <label class="input-label">Адрес доставки</label>
           <input class="inp" id="coAddress" placeholder="г. Минск, ул. Ленина 1, кв. 5" oninput="updateMapLink()">
-          <div style="margin-top:6px;">
-            <button type="button" class="btn-secondary" style="width:auto;display:inline-block;padding:8px 12px;margin:0;" onclick="openMap()">🗺 Открыть на карте</button>
-          </div>
+          <div style="margin-top:6px;"><button type="button" class="btn-secondary" style="width:auto;display:inline-block;padding:8px 12px;margin:0;" onclick="openMap()">🗺 Открыть на карте</button></div>
         </div>
       </div>
-
       <div id="pickupAddressBlock" style="display:none; margin-top:12px;">
         <div style="padding:10px; background:var(--surface); border-radius:12px; margin-bottom:8px;">
           <div style="font-size:13px; color:var(--text-muted);">📍 <b>Беларусь, г. Витебск, ул. Генерала Ивановского, д. 34</b></div>
         </div>
         <button type="button" class="btn-secondary" style="width:auto;display:inline-block;padding:8px 12px;margin:0;" onclick="openPickupMap()">🗺 Показать на карте</button>
       </div>
-
-      <div class="input-group" style="margin-top:12px;">
-        <label class="input-label">Имя получателя</label>
-        <input class="inp" id="coName" placeholder="Иван Иванов">
-      </div>
-      <div class="input-group">
-        <label class="input-label">Номер телефона</label>
-        <input class="inp" id="coPhone" placeholder="+375 XX XXX-XX-XX" type="tel">
-      </div>
-      <div class="input-group">
-        <label class="input-label">Комментарий (необязательно)</label>
-        <input class="inp" id="coComment" placeholder="Позвоните за 30 минут...">
-      </div>
-
+      <div class="input-group" style="margin-top:12px;"><label class="input-label">Имя получателя</label><input class="inp" id="coName" placeholder="Иван Иванов"></div>
+      <div class="input-group"><label class="input-label">Номер телефона</label><input class="inp" id="coPhone" placeholder="+375 XX XXX-XX-XX" type="tel"></div>
+      <div class="input-group"><label class="input-label">Комментарий (необязательно)</label><input class="inp" id="coComment" placeholder="Позвоните за 30 минут..."></div>
       <button class="btn-primary" onclick="checkoutNext()">Далее → Оплата</button>
       <button class="btn-secondary" onclick="closeModal('checkoutModal')">Отмена</button>
     </div>
-
     <div class="checkout-step" id="checkoutStep2">
-      <div class="checkout-progress">
-        <div class="progress-dot done"></div>
-        <div class="progress-dot done"></div>
-        <div class="progress-dot" id="dot3b"></div>
-      </div>
+      <div class="checkout-progress"><div class="progress-dot done"></div><div class="progress-dot done"></div><div class="progress-dot" id="dot3b"></div></div>
       <div class="modal-title">💳 Способ оплаты</div>
-      <div class="pay-option selected" id="payOpt-cash" onclick="selectPay('cash')">
-        <div class="pay-radio"></div>
-        <div><div class="pay-label">💵 Наличными при получении</div><div class="pay-sub">Оплата курьеру или в пункте выдачи</div></div>
-      </div>
-      <div class="pay-option" id="payOpt-card" onclick="selectPay('card')">
-        <div class="pay-radio"></div>
-        <div><div class="pay-label">💳 Банковская карта</div><div class="pay-sub">Visa, Mastercard, Мир</div></div>
-      </div>
-      <div class="pay-option" id="payOpt-crypto" onclick="selectPay('crypto')">
-        <div class="pay-radio"></div>
-        <div><div class="pay-label">₿ Криптовалюта</div><div class="pay-sub">USDT, BTC, ETH</div></div>
-      </div>
-
-      <div style="margin-top:16px;">
-        <div class="input-label" style="margin-bottom:8px;">Ваш заказ:</div>
-        <div class="checkout-summary" id="checkoutSummary"></div>
-      </div>
-
+      <div class="pay-option selected" id="payOpt-cash" onclick="selectPay('cash')"><div class="pay-radio"></div><div><div class="pay-label">💵 Наличными при получении</div><div class="pay-sub">Оплата курьеру или в пункте выдачи</div></div></div>
+      <div class="pay-option" id="payOpt-card" onclick="selectPay('card')"><div class="pay-radio"></div><div><div class="pay-label">💳 Банковская карта</div><div class="pay-sub">Visa, Mastercard, Мир</div></div></div>
+      <div class="pay-option" id="payOpt-crypto" onclick="selectPay('crypto')"><div class="pay-radio"></div><div><div class="pay-label">₿ Криптовалюта</div><div class="pay-sub">USDT, BTC, ETH</div></div></div>
+      <div style="margin-top:16px;"><div class="input-label" style="margin-bottom:8px;">Ваш заказ:</div><div class="checkout-summary" id="checkoutSummary"></div></div>
       <button class="btn-primary" style="margin-top:14px;" onclick="submitOrder()">Подтвердить заказ</button>
       <button class="btn-secondary" onclick="checkoutBack()">← Назад</button>
     </div>
-
     <div class="checkout-step" id="checkoutStep3">
-      <div class="checkout-progress">
-        <div class="progress-dot done"></div>
-        <div class="progress-dot done"></div>
-        <div class="progress-dot done"></div>
-      </div>
+      <div class="checkout-progress"><div class="progress-dot done"></div><div class="progress-dot done"></div><div class="progress-dot done"></div></div>
       <div class="success-screen">
         <div class="success-icon">🎉</div>
         <div class="success-title">Заказ оформлен!</div>
@@ -582,6 +565,8 @@ let selectedDelivery = 'delivery';
 let checkoutData = {};
 let currentImgTab = 'upload';
 let uploadedImageBase64 = '';
+let currentCatImgTab = 'upload';
+let uploadedCatImageBase64 = '';
 
 const catIcons = { vapes:'💨', liquids:'🧪', snus:'🍃', accessories:'🔧' };
 
@@ -592,6 +577,15 @@ function pluralProducts(n) {
   return `${n} товаров`;
 }
 
+// Категории
+let categories = JSON.parse(localStorage.getItem('sl_categories') || 'null') || [
+  {id:1, key:'vapes', name:'Вейпы', icon:'💨', image:''},
+  {id:2, key:'liquids', name:'Жидкости', icon:'🧪', image:''},
+  {id:3, key:'snus', name:'Снюс', icon:'🍃', image:''},
+  {id:4, key:'accessories', name:'Расходники', icon:'🔧', image:''}
+];
+
+// Товары
 let products = JSON.parse(localStorage.getItem('sl_products') || 'null') || [
   {id:1, name:'ELFBAR 5000', desc:'5000 затяжек, богатый выбор вкусов', price:19.90, cat:'vapes', emoji:'💨', image:'', variants:[{name:'Чёрный', price:19.90}, {name:'Белый', price:19.90}, {name:'Синий', price:19.90}]},
   {id:2, name:'LOST MARY OS5000', desc:'Компактный, долгоиграющий', price:21.50, cat:'vapes', emoji:'🌊', image:'', variants:[{name:'Чёрный', price:21.50}, {name:'Красный', price:21.50}]},
@@ -604,18 +598,14 @@ let products = JSON.parse(localStorage.getItem('sl_products') || 'null') || [
 ];
 let profile = JSON.parse(localStorage.getItem('sl_profile') || '{}');
 
+function saveCategories() { localStorage.setItem('sl_categories', JSON.stringify(categories)); }
 function saveProducts() { localStorage.setItem('sl_products', JSON.stringify(products)); }
 function saveProfile() { localStorage.setItem('sl_profile', JSON.stringify(profile)); }
 
-function prodImgHTML(p, size='64px', fontSize='28px') {
-  if (p.image) {
-    return `<div class="prod-img" style="width:${size};height:${size};"><img src="${p.image}" alt="${p.name}" onerror="this.parentNode.innerHTML='<div class=\\'emoji-fallback\\'>${p.emoji || catIcons[p.cat]}</div>'"></div>`;
-  }
-  return `<div class="prod-img" style="width:${size};height:${size};font-size:${fontSize};">${p.emoji || catIcons[p.cat]}</div>`;
-}
-
+// Форматирование цены
 function formatPrice(n) { return n.toFixed(2).replace('.', ',') + ' BYN'; }
 
+// === НАВИГАЦИЯ ===
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -629,13 +619,23 @@ function showPage(page) {
   if (page === 'admin') renderAdmin();
 }
 
+// === ГЛАВНАЯ ===
 function renderHome() {
+  // Категории
+  const catGrid = document.getElementById('cat-grid');
+  catGrid.innerHTML = categories.map(cat => {
+    const cnt = products.filter(p => p.cat === cat.key).length;
+    const displayIcon = cat.image ? `<img src="${cat.image}" style="width:32px;height:32px;object-fit:contain;" alt="">` : cat.icon;
+    return `<div class="cat-card" onclick="openCategory('${cat.key}')">
+      <span class="cat-icon">${displayIcon}</span>
+      <div class="cat-name">${cat.name}</div>
+      <div class="cat-count">${pluralProducts(cnt)}</div>
+    </div>`;
+  }).join('');
+
+  // Популярные товары
   const el = document.getElementById('home-products');
   el.innerHTML = products.slice(0,4).map(p => prodCardHTML(p)).join('');
-  ['vapes','liquids','snus','accessories'].forEach(cat => {
-    const cnt = products.filter(p => p.cat === cat).length;
-    document.getElementById('cnt-' + cat).textContent = pluralProducts(cnt);
-  });
 }
 
 function prodCardHTML(p) {
@@ -647,7 +647,27 @@ function prodCardHTML(p) {
   </div>`;
 }
 
+function prodImgHTML(p, size='64px', fontSize='28px') {
+  if (p.image) {
+    return `<div class="prod-img" style="width:${size};height:${size};"><img src="${p.image}" alt="${p.name}" onerror="this.parentNode.innerHTML='<div class=\\'emoji-fallback\\'>${p.emoji || catIcons[p.cat]}</div>'"></div>`;
+  }
+  return `<div class="prod-img" style="width:${size};height:${size};font-size:${fontSize};">${p.emoji || catIcons[p.cat]}</div>`;
+}
+
+// === КАТАЛОГ ===
 function renderCatalog() {
+  // Вкладки категорий
+  const tabs = document.getElementById('catTabs');
+  let tabsHTML = '<div class="cat-tab active" data-cat="all" onclick="filterCat(this,\'all\')">Все</div>';
+  categories.forEach(cat => {
+    tabsHTML += `<div class="cat-tab" data-cat="${cat.key}" onclick="filterCat(this,'${cat.key}')">${cat.icon} ${cat.name}</div>`;
+  });
+  tabs.innerHTML = tabsHTML;
+
+  renderCatalogProducts();
+}
+
+function renderCatalogProducts() {
   const el = document.getElementById('catalog-products');
   const filtered = currentCatFilter === 'all' ? products : products.filter(p => p.cat === currentCatFilter);
   if (!filtered.length) {
@@ -661,15 +681,15 @@ function filterCat(el, cat) {
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   currentCatFilter = cat;
-  renderCatalog();
+  renderCatalogProducts();
 }
 
 function openCategory(cat) {
   currentCatFilter = cat;
-  document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
   showPage('catalog');
 }
 
+// === ДЕТАЛИ ТОВАРА ===
 function openProdDetail(id) {
   const p = products.find(x => x.id === id);
   if (!p) return;
@@ -763,6 +783,7 @@ function changeQty(key, delta) {
   renderCart();
 }
 
+// === ОФОРМЛЕНИЕ ===
 function openCheckout() {
   document.getElementById('coName').value = profile.name || '';
   document.getElementById('coPhone').value = profile.phone || '';
@@ -772,225 +793,201 @@ function openCheckout() {
   setCheckoutStep(1);
   document.getElementById('checkoutModal').classList.add('show');
 }
-
-function setCheckoutStep(step) {
-  for (let i = 1; i <= 3; i++) {
-    const s = document.getElementById('checkoutStep' + i);
-    if (s) s.classList.toggle('active', i === step);
-  }
-}
-
-function selectDelivery(method) {
-  selectedDelivery = method;
-  document.querySelectorAll('#deliveryOption-delivery, #deliveryOption-pickup').forEach(el => el.classList.remove('selected'));
-  document.getElementById('deliveryOption-' + method).classList.add('selected');
-  const addrBlock = document.getElementById('deliveryAddressBlock');
-  const pickupBlock = document.getElementById('pickupAddressBlock');
-  if (method === 'delivery') {
-    addrBlock.style.display = 'block';
-    pickupBlock.style.display = 'none';
-  } else {
-    addrBlock.style.display = 'none';
-    pickupBlock.style.display = 'block';
-  }
-}
-
-function openMap() {
-  const addr = document.getElementById('coAddress').value.trim();
-  if (!addr) { showToast('Введите адрес'); return; }
-  window.open(`https://maps.google.com/maps?q=${encodeURIComponent(addr)}`, '_blank');
-}
-
-function openPickupMap() {
-  window.open('https://maps.google.com/maps?q=Витебск+ул.+Генерала+Ивановского+34', '_blank');
-}
-
+function setCheckoutStep(step) { for (let i = 1; i <= 3; i++) { const s = document.getElementById('checkoutStep' + i); if (s) s.classList.toggle('active', i === step); } }
+function selectDelivery(method) { selectedDelivery = method; document.querySelectorAll('#deliveryOption-delivery, #deliveryOption-pickup').forEach(el => el.classList.remove('selected')); document.getElementById('deliveryOption-'+method).classList.add('selected'); const addrBlock = document.getElementById('deliveryAddressBlock'); const pickupBlock = document.getElementById('pickupAddressBlock'); if (method === 'delivery') { addrBlock.style.display = 'block'; pickupBlock.style.display = 'none'; } else { addrBlock.style.display = 'none'; pickupBlock.style.display = 'block'; } }
+function openMap() { const addr = document.getElementById('coAddress').value.trim(); if (!addr) { showToast('Введите адрес'); return; } window.open(`https://maps.google.com/maps?q=${encodeURIComponent(addr)}`, '_blank'); }
+function openPickupMap() { window.open('https://maps.google.com/maps?q=Витебск+ул.+Генерала+Ивановского+34', '_blank'); }
 function checkoutNext() {
   const name = document.getElementById('coName').value.trim();
   const phone = document.getElementById('coPhone').value.trim();
   const address = selectedDelivery === 'pickup' ? 'Самовывоз, г. Витебск, ул. Генерала Ивановского, д. 34' : document.getElementById('coAddress').value.trim();
-  if (!name || !phone || (!address && selectedDelivery === 'delivery')) {
-    showToast('Заполните все обязательные поля');
-    return;
-  }
+  if (!name || !phone || (!address && selectedDelivery === 'delivery')) { showToast('Заполните все обязательные поля'); return; }
   checkoutData = { name, phone, address, comment: document.getElementById('coComment').value.trim(), delivery: selectedDelivery };
-  let summaryHTML = '';
-  let total = 0;
-  Object.keys(cart).forEach(key => {
-    if (key === '_details') return;
-    const detail = cart._details?.[key];
-    if (!detail) return;
-    const qty = cart[key];
-    const sub = detail.price * qty;
-    total += sub;
-    summaryHTML += `<div class="checkout-summary-item"><span>${detail.productName}${detail.variant ? ' (' + detail.variant + ')' : ''} × ${qty}</span><span>${formatPrice(sub)}</span></div>`;
-  });
+  let summaryHTML = ''; let total = 0;
+  Object.keys(cart).forEach(key => { if (key === '_details') return; const detail = cart._details?.[key]; if (!detail) return; const qty = cart[key]; const sub = detail.price * qty; total += sub; summaryHTML += `<div class="checkout-summary-item"><span>${detail.productName}${detail.variant ? ' ('+detail.variant+')' : ''} × ${qty}</span><span>${formatPrice(sub)}</span></div>`; });
   summaryHTML += `<div class="checkout-summary-total"><span>Итого</span><span style="background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${formatPrice(total)}</span></div>`;
   document.getElementById('checkoutSummary').innerHTML = summaryHTML;
   setCheckoutStep(2);
 }
-
 function checkoutBack() { setCheckoutStep(1); }
-
-function selectPay(method) {
-  selectedPayMethod = method;
-  document.querySelectorAll('.pay-option').forEach(el => el.classList.remove('selected'));
-  document.getElementById('payOpt-' + method).classList.add('selected');
-}
-
+function selectPay(method) { selectedPayMethod = method; document.querySelectorAll('.pay-option').forEach(el => el.classList.remove('selected')); document.getElementById('payOpt-'+method).classList.add('selected'); }
 function submitOrder() {
   const items = [];
-  Object.keys(cart).forEach(key => {
-    if (key === '_details') return;
-    const detail = cart._details?.[key];
-    if (!detail) return;
-    const qty = cart[key];
-    const price = detail.price;
-    const name = detail.variant ? `${detail.productName} (${detail.variant})` : detail.productName;
-    items.push({ id: detail.productId, name: name, qty: qty, price: price });
-  });
-
-  let total = 0;
-  items.forEach(it => total += it.price * it.qty);
-
-  const orderPayload = {
-    type: 'order',
-    items: items,
-    total: total,
-    payment: selectedPayMethod,
-    customer: checkoutData
-  };
-
-  if (window.Telegram?.WebApp?.sendData) {
-    try {
-      window.Telegram.WebApp.sendData(JSON.stringify(orderPayload));
-    } catch(e) {
-      showToast('Ошибка отправки заказа в Telegram');
-      return;
-    }
-  } else {
-    alert('Заказ оформлен! (Telegram не обнаружен)');
-    showToast('Заказ оформлен (симуляция)');
-  }
-
-  profile.name = checkoutData.name;
-  profile.phone = checkoutData.phone;
-  profile.address = checkoutData.address;
-  saveProfile();
-
+  Object.keys(cart).forEach(key => { if (key === '_details') return; const detail = cart._details?.[key]; if (!detail) return; const qty = cart[key]; const price = detail.price; const name = detail.variant ? `${detail.productName} (${detail.variant})` : detail.productName; items.push({ id: detail.productId, name: name, qty: qty, price: price }); });
+  let total = 0; items.forEach(it => total += it.price * it.qty);
+  const orderPayload = { type: 'order', items: items, total: total, payment: selectedPayMethod, customer: checkoutData };
+  if (window.Telegram?.WebApp?.sendData) { try { window.Telegram.WebApp.sendData(JSON.stringify(orderPayload)); } catch(e) { showToast('Ошибка отправки заказа в Telegram'); return; } } else { alert('Заказ оформлен! (Telegram не обнаружен)'); showToast('Заказ оформлен (симуляция)'); }
+  profile.name = checkoutData.name; profile.phone = checkoutData.phone; profile.address = checkoutData.address; saveProfile();
   document.getElementById('orderNumDisplay').textContent = 'Оформлен';
-  setCheckoutStep(3);
-  cart = {};
-  updateCartCount();
+  setCheckoutStep(3); cart = {}; updateCartCount();
 }
-
-function closeCheckoutSuccess() {
-  closeModal('checkoutModal');
-  renderCart();
-  showPage('home');
-}
-
+function closeCheckoutSuccess() { closeModal('checkoutModal'); renderCart(); showPage('home'); }
 function renderProfile() {
   const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (tg) {
-    const name = [tg.first_name, tg.last_name].filter(Boolean).join(' ');
-    document.getElementById('profileName').textContent = name || 'Пользователь';
-    document.getElementById('profileAvatar').textContent = (name || 'U')[0].toUpperCase();
-    document.getElementById('profileId').textContent = 'ID: ' + tg.id;
-    document.getElementById('profileUsername').textContent = tg.username ? '@' + tg.username : '';
-  }
+  if (tg) { const name = [tg.first_name, tg.last_name].filter(Boolean).join(' '); document.getElementById('profileName').textContent = name || 'Пользователь'; document.getElementById('profileAvatar').textContent = (name || 'U')[0].toUpperCase(); document.getElementById('profileId').textContent = 'ID: ' + tg.id; document.getElementById('profileUsername').textContent = tg.username ? '@' + tg.username : ''; }
   document.getElementById('cardVal').textContent = profile.card || 'Не привязана';
   document.getElementById('addressVal').textContent = profile.address || 'Не указан';
   document.getElementById('phoneVal').textContent = profile.phone || 'Не указан';
 }
+function openEdit(field) { currentEditField = field; const labels = { card:'Номер карты', address:'Адрес доставки', phone:'Номер телефона' }; const titles = { card:'Банковская карта', address:'Адрес доставки', phone:'Телефон' }; document.getElementById('editModalTitle').textContent = titles[field]; document.getElementById('editModalLabel').textContent = labels[field]; document.getElementById('editModalInput').value = profile[field] || ''; document.getElementById('editModal').classList.add('show'); }
+function saveEdit() { if (currentEditField) { profile[currentEditField] = document.getElementById('editModalInput').value.trim(); saveProfile(); renderProfile(); } closeModal('editModal'); showToast('Сохранено ✓'); }
 
-function openEdit(field) {
-  currentEditField = field;
-  const labels = { card:'Номер карты', address:'Адрес доставки', phone:'Номер телефона' };
-  const titles = { card:'Банковская карта', address:'Адрес доставки', phone:'Телефон' };
-  document.getElementById('editModalTitle').textContent = titles[field];
-  document.getElementById('editModalLabel').textContent = labels[field];
-  document.getElementById('editModalInput').value = profile[field] || '';
-  document.getElementById('editModal').classList.add('show');
-}
-
-function saveEdit() {
-  if (currentEditField) {
-    profile[currentEditField] = document.getElementById('editModalInput').value.trim();
-    saveProfile();
-    renderProfile();
-  }
-  closeModal('editModal');
-  showToast('Сохранено ✓');
-}
-
-// ========== АДМИН-ПАНЕЛЬ ==========
+// === АДМИН-ПАНЕЛЬ ===
 function renderAdmin() {
-  if (adminUnlocked) {
-    document.getElementById('admin-pass-screen').classList.remove('visible');
-    document.getElementById('admin-main').classList.add('visible');
-    document.getElementById('statProducts').textContent = products.length;
-    showAdminProducts();
-  } else {
-    document.getElementById('admin-pass-screen').classList.add('visible');
-    document.getElementById('admin-main').classList.remove('visible');
-  }
+  if (adminUnlocked) { document.getElementById('admin-pass-screen').classList.remove('visible'); document.getElementById('admin-main').classList.add('visible'); document.getElementById('statProducts').textContent = products.length; showAdminCategories(); showAdminProducts(); }
+  else { document.getElementById('admin-pass-screen').classList.add('visible'); document.getElementById('admin-main').classList.remove('visible'); }
 }
-
-function checkPass() {
-  if (document.getElementById('adminPassInput').value === ADMIN_PASS) {
-    adminUnlocked = true;
-    document.getElementById('passError').style.display = 'none';
-    document.getElementById('adminPassInput').value = '';
-    renderAdmin();
-  } else {
-    document.getElementById('passError').style.display = 'block';
-  }
-}
-
+function checkPass() { if (document.getElementById('adminPassInput').value === ADMIN_PASS) { adminUnlocked = true; document.getElementById('passError').style.display = 'none'; document.getElementById('adminPassInput').value = ''; renderAdmin(); } else { document.getElementById('passError').style.display = 'block'; } }
 function adminLogout() { adminUnlocked = false; renderAdmin(); }
 
-function showAdminProducts() {
-  const el = document.getElementById('admin-prod-list');
-  if (!products.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Нет товаров</div></div>';
-    return;
-  }
-  el.innerHTML = products.map(p => `
-    <div class="prod-card" style="margin-bottom:10px;">
-      <div class="admin-prod-img">
-        ${p.image ? `<img src="${p.image}" alt="${p.name}" onerror="this.outerHTML='${p.emoji||catIcons[p.cat]}'">` : (p.emoji || catIcons[p.cat])}
+// Управление категориями
+function showAdminCategories() {
+  const el = document.getElementById('admin-cat-list');
+  if (!categories.length) { el.innerHTML = '<div class="empty"><div class="empty-text">Нет категорий</div></div>'; return; }
+  el.innerHTML = categories.map(cat => `
+    <div class="cart-item" style="margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;">
+        ${cat.image ? `<img src="${cat.image}" style="width:32px;height:32px;object-fit:contain;border-radius:6px;">` : `<span style="font-size:24px;">${cat.icon}</span>`}
+        <div><div class="prod-name">${cat.name}</div><div class="prod-desc">${cat.key}</div></div>
       </div>
-      <div class="prod-info">
-        <div class="prod-name">${p.name}</div>
-        <div class="prod-price">${formatPrice(p.price)}</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-shrink:0;">
-        <div class="field-edit" onclick="openEditProduct(${p.id})">✏️</div>
-        <div class="field-edit" style="background:rgba(239,68,68,0.1);color:var(--danger);" onclick="deleteProduct(${p.id})">🗑️</div>
+      <div style="display:flex;gap:6px;">
+        <div class="field-edit" onclick="openEditCategory(${cat.id})">✏️</div>
+        <div class="field-edit" style="background:rgba(239,68,68,0.1);color:var(--danger);" onclick="deleteCategory(${cat.id})">🗑️</div>
       </div>
     </div>
   `).join('');
-  document.getElementById('statProducts').textContent = products.length;
 }
 
-// ========== CRUD ТОВАРОВ ==========
+function openAddCategory() {
+  document.getElementById('addCatTitle').textContent = 'Новая категория';
+  document.getElementById('editCatId').value = '';
+  document.getElementById('catName').value = '';
+  document.getElementById('catKey').value = '';
+  document.getElementById('catEmoji').value = '';
+  document.getElementById('catImgUrl').value = '';
+  document.getElementById('urlPreviewBoxCat').style.display = 'none';
+  clearUploadedImageCat();
+  switchCatImgTab('upload');
+  document.getElementById('addCategoryModal').classList.add('show');
+}
+
+function openEditCategory(id) {
+  const cat = categories.find(c => c.id === id);
+  if (!cat) return;
+  document.getElementById('addCatTitle').textContent = 'Редактировать категорию';
+  document.getElementById('editCatId').value = id;
+  document.getElementById('catName').value = cat.name;
+  document.getElementById('catKey').value = cat.key;
+  document.getElementById('catEmoji').value = cat.icon || '';
+  clearUploadedImageCat();
+  if (cat.image && cat.image.startsWith('data:')) {
+    uploadedCatImageBase64 = cat.image;
+    document.getElementById('uploadPreviewCat').src = cat.image;
+    document.getElementById('uploadPreviewCat').style.display = 'block';
+    document.getElementById('uploadPlaceholderCat').style.display = 'none';
+    document.getElementById('uploadAreaCat').classList.add('has-image');
+    document.getElementById('clearImgBtnCat').style.display = 'block';
+    switchCatImgTab('upload');
+    document.getElementById('catImgUrl').value = '';
+  } else if (cat.image) {
+    document.getElementById('catImgUrl').value = cat.image;
+    const box = document.getElementById('urlPreviewBoxCat');
+    const img = document.getElementById('urlPreviewCat');
+    img.src = cat.image; box.style.display = 'block';
+    switchCatImgTab('url');
+  } else {
+    switchCatImgTab('upload');
+    document.getElementById('catImgUrl').value = '';
+  }
+  document.getElementById('addCategoryModal').classList.add('show');
+}
+
+function saveCategory() {
+  const name = document.getElementById('catName').value.trim();
+  const key = document.getElementById('catKey').value.trim().toLowerCase().replace(/\s+/g, '_');
+  const emoji = document.getElementById('catEmoji').value.trim();
+  if (!name || !key) { showToast('Название и ключ обязательны'); return; }
+
+  let image = '';
+  if (currentCatImgTab === 'upload' && uploadedCatImageBase64) image = uploadedCatImageBase64;
+  else if (currentCatImgTab === 'url') image = document.getElementById('catImgUrl').value.trim();
+
+  const editId = document.getElementById('editCatId').value;
+  if (editId) {
+    const idx = categories.findIndex(c => c.id == editId);
+    if (idx !== -1) categories[idx] = { ...categories[idx], name, key, icon: emoji, image };
+  } else {
+    categories.push({ id: Date.now(), key, name, icon: emoji, image });
+  }
+  saveCategories();
+  closeModal('addCategoryModal');
+  renderHome();
+  renderAdmin();
+  showToast(editId ? 'Категория обновлена ✓' : 'Категория добавлена ✓');
+}
+
+function deleteCategory(id) {
+  if (!confirm('Удалить категорию? Это не удалит товары.')) return;
+  categories = categories.filter(c => c.id !== id);
+  saveCategories();
+  renderHome();
+  renderAdmin();
+  showToast('Категория удалена');
+}
+
+// Переключение вкладок для категорий
+function switchCatImgTab(tab) {
+  currentCatImgTab = tab;
+  document.querySelectorAll('#addCategoryModal .img-tab').forEach((t, i) => { t.classList.toggle('active', (i === 0 && tab === 'upload') || (i === 1 && tab === 'url')); });
+  document.getElementById('imgTabUpload').classList.toggle('active', tab === 'upload');
+  document.getElementById('imgTabUrl').classList.toggle('active', tab === 'url');
+}
+function handleFileUploadCat(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { showToast('Файл слишком большой (макс. 10MB)'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    uploadedCatImageBase64 = e.target.result;
+    document.getElementById('uploadPreviewCat').src = uploadedCatImageBase64;
+    document.getElementById('uploadPreviewCat').style.display = 'block';
+    document.getElementById('uploadPlaceholderCat').style.display = 'none';
+    document.getElementById('uploadAreaCat').classList.add('has-image');
+    document.getElementById('clearImgBtnCat').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearUploadedImageCat() {
+  uploadedCatImageBase64 = '';
+  document.getElementById('uploadPreviewCat').style.display = 'none';
+  document.getElementById('uploadPreviewCat').src = '';
+  document.getElementById('uploadPlaceholderCat').style.display = 'flex';
+  document.getElementById('uploadAreaCat').classList.remove('has-image');
+  document.getElementById('clearImgBtnCat').style.display = 'none';
+  document.getElementById('imgFileInputCat').value = '';
+}
+
+// Управление товарами (с учетом новых категорий)
+function populateCatSelect() {
+  const sel = document.getElementById('prodCat');
+  if (!sel) return;
+  sel.innerHTML = categories.map(cat => `<option value="${cat.key}">${cat.icon} ${cat.name}</option>`).join('');
+}
 function openAddProduct() {
+  populateCatSelect();
   document.getElementById('addProdTitle').textContent = 'Новый товар';
   document.getElementById('editProdId').value = '';
   document.getElementById('prodName').value = '';
   document.getElementById('prodDesc').value = '';
   document.getElementById('prodPrice').value = '';
-  document.getElementById('prodCat').value = 'vapes';
   document.getElementById('prodEmoji').value = '';
   document.getElementById('prodImgUrl').value = '';
   document.getElementById('urlPreviewBox').style.display = 'none';
-  clearUploadedImage();
-  switchImgTab('upload');
+  clearUploadedImage(); switchImgTab('upload');
   document.getElementById('addProductModal').classList.add('show');
 }
-
 function openEditProduct(id) {
+  populateCatSelect();
   const p = products.find(x => x.id === id);
   if (!p) return;
   document.getElementById('addProdTitle').textContent = 'Редактировать товар';
@@ -1001,131 +998,86 @@ function openEditProduct(id) {
   document.getElementById('prodCat').value = p.cat;
   document.getElementById('prodEmoji').value = p.emoji || '';
   clearUploadedImage();
-
   if (p.image && p.image.startsWith('data:')) {
     uploadedImageBase64 = p.image;
-    const preview = document.getElementById('uploadPreview');
-    preview.src = p.image;
-    preview.style.display = 'block';
+    document.getElementById('uploadPreview').src = p.image; document.getElementById('uploadPreview').style.display = 'block';
     document.getElementById('uploadPlaceholder').style.display = 'none';
     document.getElementById('uploadArea').classList.add('has-image');
     document.getElementById('clearImgBtn').style.display = 'block';
-    switchImgTab('upload');
-    document.getElementById('prodImgUrl').value = '';
+    switchImgTab('upload'); document.getElementById('prodImgUrl').value = '';
   } else if (p.image) {
     document.getElementById('prodImgUrl').value = p.image;
-    const box = document.getElementById('urlPreviewBox');
-    const img = document.getElementById('urlPreview');
-    img.src = p.image;
-    box.style.display = 'block';
+    document.getElementById('urlPreviewBox').style.display = 'block';
+    document.getElementById('urlPreview').src = p.image;
     switchImgTab('url');
-  } else {
-    switchImgTab('upload');
-    document.getElementById('prodImgUrl').value = '';
-  }
-
+  } else { switchImgTab('upload'); document.getElementById('prodImgUrl').value = ''; }
   document.getElementById('addProductModal').classList.add('show');
 }
-
 function saveProduct() {
   const name = document.getElementById('prodName').value.trim();
   const desc = document.getElementById('prodDesc').value.trim();
   const price = parseFloat(document.getElementById('prodPrice').value);
   const cat = document.getElementById('prodCat').value;
-  const emoji = document.getElementById('prodEmoji').value.trim() || catIcons[cat];
+  const emoji = document.getElementById('prodEmoji').value.trim() || catIcons[cat] || '📦';
   if (!name || isNaN(price) || price <= 0) { showToast('Заполните название и цену'); return; }
-
   let image = '';
-  if (currentImgTab === 'upload' && uploadedImageBase64) {
-    image = uploadedImageBase64;
-  } else if (currentImgTab === 'url') {
-    image = document.getElementById('prodImgUrl').value.trim();
-  }
-
+  if (currentImgTab === 'upload' && uploadedImageBase64) image = uploadedImageBase64;
+  else if (currentImgTab === 'url') image = document.getElementById('prodImgUrl').value.trim();
   const editId = document.getElementById('editProdId').value;
-  if (editId) {
-    const idx = products.findIndex(p => p.id == editId);
-    if (idx !== -1) products[idx] = { ...products[idx], name, desc, price, cat, emoji, image };
-  } else {
-    products.push({ id: Date.now(), name, desc, price, cat, emoji, image });
-  }
-  saveProducts();
-  closeModal('addProductModal');
-  showAdminProducts();
+  if (editId) { const idx = products.findIndex(p => p.id == editId); if (idx !== -1) products[idx] = { ...products[idx], name, desc, price, cat, emoji, image }; }
+  else { products.push({ id: Date.now(), name, desc, price, cat, emoji, image }); }
+  saveProducts(); closeModal('addProductModal'); showAdminProducts(); renderHome();
   showToast(editId ? 'Товар обновлён ✓' : 'Товар добавлен ✓');
 }
-
-function deleteProduct(id) {
-  if (!confirm('Удалить этот товар?')) return;
-  products = products.filter(p => p.id !== id);
-  saveProducts();
-  showAdminProducts();
-  showToast('Товар удалён');
+function deleteProduct(id) { if (!confirm('Удалить этот товар?')) return; products = products.filter(p => p.id !== id); saveProducts(); showAdminProducts(); renderHome(); showToast('Товар удалён'); }
+function showAdminProducts() {
+  const el = document.getElementById('admin-prod-list');
+  if (!products.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Нет товаров</div></div>'; return; }
+  el.innerHTML = products.map(p => `
+    <div class="prod-card" style="margin-bottom:10px;">
+      <div class="admin-prod-img">${p.image ? `<img src="${p.image}" alt="${p.name}" onerror="this.outerHTML='${p.emoji||catIcons[p.cat]}'">` : (p.emoji || catIcons[p.cat])}</div>
+      <div class="prod-info"><div class="prod-name">${p.name}</div><div class="prod-price">${formatPrice(p.price)}</div></div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <div class="field-edit" onclick="openEditProduct(${p.id})">✏️</div>
+        <div class="field-edit" style="background:rgba(239,68,68,0.1);color:var(--danger);" onclick="deleteProduct(${p.id})">🗑️</div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('statProducts').textContent = products.length;
 }
 
-// ========== ИЗОБРАЖЕНИЯ ==========
-function switchImgTab(tab) {
-  currentImgTab = tab;
-  document.querySelectorAll('.img-tab').forEach((t, i) => { t.classList.toggle('active', (i === 0 && tab === 'upload') || (i === 1 && tab === 'url')); });
-  document.getElementById('imgTabUpload').classList.toggle('active', tab === 'upload');
-  document.getElementById('imgTabUrl').classList.toggle('active', tab === 'url');
-}
+// Обработка изображений
+function switchImgTab(tab) { currentImgTab = tab; document.querySelectorAll('#addProductModal .img-tab').forEach((t,i)=>{t.classList.toggle('active',(i===0&&tab==='upload')||(i===1&&tab==='url'));}); document.getElementById('imgTabUpload').classList.toggle('active',tab==='upload'); document.getElementById('imgTabUrl').classList.toggle('active',tab==='url'); }
 function handleFileUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size > 2*1024*1024) { showToast('Файл слишком большой (макс. 2MB)'); return; }
+  if (file.size > 10 * 1024 * 1024) { showToast('Файл слишком большой (макс. 10MB)'); return; }
   const reader = new FileReader();
-  reader.onload = (e) => {
-    uploadedImageBase64 = e.target.result;
-    document.getElementById('uploadPreview').src = uploadedImageBase64;
-    document.getElementById('uploadPreview').style.display = 'block';
-    document.getElementById('uploadPlaceholder').style.display = 'none';
-    document.getElementById('uploadArea').classList.add('has-image');
-    document.getElementById('clearImgBtn').style.display = 'block';
-  };
+  reader.onload = (e) => { uploadedImageBase64 = e.target.result; document.getElementById('uploadPreview').src=uploadedImageBase64; document.getElementById('uploadPreview').style.display='block'; document.getElementById('uploadPlaceholder').style.display='none'; document.getElementById('uploadArea').classList.add('has-image'); document.getElementById('clearImgBtn').style.display='block'; };
   reader.readAsDataURL(file);
 }
-function clearUploadedImage() {
-  uploadedImageBase64 = '';
-  document.getElementById('uploadPreview').style.display = 'none';
-  document.getElementById('uploadPreview').src = '';
-  document.getElementById('uploadPlaceholder').style.display = 'flex';
-  document.getElementById('uploadArea').classList.remove('has-image');
-  document.getElementById('clearImgBtn').style.display = 'none';
-  document.getElementById('imgFileInput').value = '';
-}
+function clearUploadedImage() { uploadedImageBase64=''; document.getElementById('uploadPreview').style.display='none'; document.getElementById('uploadPreview').src=''; document.getElementById('uploadPlaceholder').style.display='flex'; document.getElementById('uploadArea').classList.remove('has-image'); document.getElementById('clearImgBtn').style.display='none'; document.getElementById('imgFileInput').value=''; }
 
-// ========== СКРЫТИЕ АДМИНКИ ==========
+// Скрытие админки для не-админов
 function initAdminVisibility() {
   const tg = window.Telegram?.WebApp;
-  if (!tg) return; // не в Telegram — оставляем панель (для отладки в браузере)
-
+  if (!tg) return;
   const user = tg.initDataUnsafe?.user;
-  if (user && user.id && user.id !== ADMIN_ID) {
-    // Точно знаем ID, и он не админский — скрываем
+  if (user && user.id && Number(user.id) !== ADMIN_ID) {
     const adminPage = document.getElementById('page-admin');
     const adminNav = document.getElementById('nav-admin');
     if (adminPage) adminPage.remove();
     if (adminNav) adminNav.remove();
   }
-  // Если user не определён — панель остаётся видимой
 }
 
-// ========== УТИЛИТЫ ==========
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
-}
-
+// Утилиты
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
+// Инициализация
 if (window.Telegram?.WebApp) {
-  const tg = window.Telegram.WebApp;
-  tg.ready();
-  tg.expand();
+  const tg = window.Telegram.WebApp; tg.ready(); tg.expand();
   if (tg.colorScheme === 'light') {
     document.documentElement.style.setProperty('--bg', '#F8F7FF');
     document.documentElement.style.setProperty('--card', '#FFFFFF');
