@@ -24,7 +24,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # Конфигурация
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8160958113"))
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")
 
@@ -228,7 +228,11 @@ def admin_notification_text(order):
     delivery_cost = order.get("delivery_cost", 0)
     total = order["total"] + delivery_cost
     payment_label = PAY_LABELS.get(order["payment"], order["payment"])
-    addr_str = build_address_link(customer.get("address", "—"))
+    # Для самовывоза – адрес без ссылки
+    if customer.get("delivery") == "pickup":
+        addr_str = customer.get("address", "—")
+    else:
+        addr_str = build_address_link(customer.get("address", "—"))
     return (
         f"🔔 <b>НОВЫЙ ЗАКАЗ {order['order_num']}</b>\n"
         f"🕐 {order['created_at']}\n\n"
