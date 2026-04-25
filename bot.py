@@ -1,7 +1,7 @@
 """
 SMOKELAB Telegram Bot — aiogram 3.x
-Хостинг: Koyeb / Render (бесплатный worker)
-Функции: приём заказов из Mini App, управление заказами админом, SQLite.
+Хостинг: Render (бесплатный Web Service)
+Функции: приём заказов из Mini App, управление заказами админом (через Mini App или inline-кнопки), SQLite, HTTP API.
 """
 
 import asyncio
@@ -27,11 +27,12 @@ from aiogram.types import (
 )
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiohttp import web
 
 # ─── КОНФИГУРАЦИЯ (переменные окружения) ──────────────────────────────────────
 BOT_TOKEN    = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
 ADMIN_ID     = int(os.getenv("ADMIN_ID", "8160958113"))
-MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")  # GitHub Pages URL или аналогичный
+MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не задан! Добавьте его в переменные окружения.")
@@ -411,7 +412,6 @@ async def cmd_orders_active(msg: Message):
 async def cmd_order_status(msg: Message):
     if msg.from_user.id != ADMIN_ID:
         return await msg.answer("⛔ Нет доступа.")
-    # Простейшая реализация: просим ввести номер заказа и новый статус
     await msg.answer(
         "Формат: <code>/set_status #000001 accepted</code>\n\n"
         "Доступные статусы: accepted, shipping, done, cancelled",
@@ -440,20 +440,86 @@ async def cmd_set_status(msg: Message):
     except Exception as e:
         log.error("Не удалось уведомить пользователя: %s", e)
 
+# ───────────────────────────────── HTTP API для Mini App ──────────────────────
+async def api_get_orders(request):
+    """Возвращает список заказов: для админа — все активные, для клиента — его заказы."""
+    user_id = request.query.get('user_id')
+    if user_id:
+        orders = get_user_orders(int(user_id))
+    else:
+        orders = get_active_orders()
+
+    result = []
+    for o in orders:
+        result.append({
+            "order_num": o["order_num"],
+            "total": o["total"],
+            "payment": o["payment"],
+            "status": o["status"],
+            "created_at": o["created_at"],
+            "items": o["items"],
+            "customer": o["customer"]
+        })
+    return web.json_response(result)
+
+async def api_update_status(request):
+    """Изменяет статус заказа (требуется пароль администратора)."""
+    try:
+        data = await request.json()
+    except:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    password = data.get("password")
+    order_num = data.get("order_num")
+    new_status = data.get("status")
+
+    if password != "1234":  # пароль, как в Mini App (ADMIN_PASS)
+        return web.json_response({"error": "Unauthorized"}, status=403)
+    if new_status not in STATUS_INFO:
+        return web.json_response({"error": "Invalid status"}, status=400)
+
+    order = get_order(order_num)
+    if not order:
+        return web.json_response({"error": "Order not found"}, status=404)
+
+    update_order_status(order_num, new_status)
+    label, user_text = STATUS_INFO[new_status]
+
+    # Уведомление клиенту
+    try:
+        await bot.send_message(order["user_id"], user_text.format(num=order_num))
+    except Exception as e:
+        log.error("Не удалось уведомить пользователя: %s", e)
+
+    return web.json_response({"success": True, "status": label})
+
+async def run_web_server():
+    app = web.Application()
+    app.router.add_get('/api/orders', api_get_orders)
+    app.router.add_post('/api/orders/status', api_update_status)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+    log.info("HTTP API started on port 8080")
+
 # ─── ЗАПУСК ──────────────────────────────────────────────────────────────────
 async def main():
     init_db()
-    # Установим список команд в интерфейсе бота
     await bot.set_my_commands([
         BotCommand(command="start", description="Главное меню"),
         BotCommand(command="orders", description="Мои заказы"),
         BotCommand(command="help", description="Помощь"),
     ])
     log.info("SMOKELAB Bot запускается | ADMIN_ID=%s", ADMIN_ID)
-    try:
-        await dp.start_polling(bot, skip_updates=True)
-    finally:
-        await bot.session.close()
+
+    # Запускаем веб-сервер и поллинг параллельно
+    await asyncio.gather(
+        run_web_server(),
+        dp.start_polling(bot, skip_updates=True)
+    )
 
 if __name__ == "__main__":
+    import time
+    time.sleep(2)  # небольшая задержка для корректного перезапуска на Render
     asyncio.run(main())
