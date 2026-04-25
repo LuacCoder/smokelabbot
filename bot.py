@@ -20,7 +20,7 @@ from aiohttp import web
 
 # ── Конфигурация ──────────────────────────────────────────────────────────────
 BOT_TOKEN    = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
-ADMIN_ID     = int(os.getenv("ADMIN_ID", "5699647941"))   # ← твой ID
+ADMIN_ID     = int(os.getenv("ADMIN_ID", "8160958113"))   # ← твой ID
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")
 PORT         = int(os.getenv("PORT", "8080"))
 
