@@ -1403,9 +1403,12 @@ function sendBroadcast() {
 // ─── Telegram init ────────────────────────────────────────────────────────────
 function initAdminVisibility() {
   const navAdmin = document.getElementById('nav-admin');
-  const userId   = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-  if (navAdmin && userId && Number(userId) === ADMIN_ID) {
-    navAdmin.style.display = '';
+  if (!navAdmin) return;
+  const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  if (userId && Number(userId) === ADMIN_ID) {
+    navAdmin.style.display = '';   // показываем
+  } else {
+    navAdmin.style.display = 'none';  // скрываем для всех остальных
   }
 }
 
