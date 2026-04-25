@@ -491,11 +491,6 @@
           <input class="inp" id="coAddress" placeholder="г. Витебск, ул. ..." oninput="updateMapLink()">
           <div style="margin-top:6px;"><button type="button" class="btn-secondary" style="width:auto;display:inline-block;padding:8px 12px;margin:0;" onclick="openMap()">🗺 Открыть в Яндекс.Картах</button></div>
         </div>
-        <div class="input-group">
-          <label class="input-label">Расстояние доставки (км)</label>
-          <input class="inp" type="number" id="deliveryDistance" placeholder="0.0" step="0.1" oninput="updateDeliveryCost()">
-          <div style="margin-top:6px; font-size:13px; color:var(--text-muted);" id="deliveryCostDisplay">Стоимость доставки: 0 BYN</div>
-        </div>
       </div>
       <div id="pickupAddressBlock" style="display:none; margin-top:12px;">
         <div style="padding:10px; background:var(--surface); border-radius:12px; margin-bottom:8px;">
@@ -584,7 +579,6 @@ function pluralProducts(n) {
   return `${n} товаров`;
 }
 
-// Категории
 let categories = JSON.parse(localStorage.getItem('sl_categories') || 'null') || [
   {id:1, key:'vapes', name:'Вейпы', icon:'💨', image:''},
   {id:2, key:'liquids', name:'Жидкости', icon:'🧪', image:''},
@@ -723,21 +717,54 @@ function renderCart() {
 
 function changeQty(key, delta) { cart[key] = (cart[key] || 0) + delta; if (cart[key] <= 0) { delete cart[key]; if (cart._details) delete cart._details[key]; } updateCartCount(); renderCart(); }
 
-// Оформление
-function openCheckout() { document.getElementById('coName').value = profile.name || ''; document.getElementById('coPhone').value = profile.phone || ''; document.getElementById('coAddress').value = profile.address || ''; selectedDelivery = 'delivery'; selectDelivery('delivery'); setCheckoutStep(1); document.getElementById('checkoutModal').classList.add('show'); }
+// Оформление (без поля расстояния, фиксированная доставка 3 BYN)
+function openCheckout() {
+  document.getElementById('coName').value = profile.name || '';
+  document.getElementById('coPhone').value = profile.phone || '';
+  document.getElementById('coAddress').value = profile.address || 'г. Витебск, ';
+  selectedDelivery = 'delivery';
+  selectDelivery('delivery');
+  setCheckoutStep(1);
+  document.getElementById('checkoutModal').classList.add('show');
+}
 function setCheckoutStep(step) { for (let i = 1; i <= 3; i++) { const s = document.getElementById('checkoutStep' + i); if (s) s.classList.toggle('active', i === step); } }
-function selectDelivery(method) { selectedDelivery = method; document.querySelectorAll('#deliveryOption-delivery, #deliveryOption-pickup').forEach(el => el.classList.remove('selected')); document.getElementById('deliveryOption-'+method).classList.add('selected'); document.getElementById('deliveryAddressBlock').style.display = method === 'delivery' ? 'block' : 'none'; document.getElementById('pickupAddressBlock').style.display = method === 'pickup' ? 'block' : 'none'; updateDeliveryCost(); }
-function updateDeliveryCost() {
-  const dist = parseFloat(document.getElementById('deliveryDistance').value) || 0;
-  let cost = 0;
-  if (selectedDelivery === 'delivery') {
-    if (dist <= 1.5) cost = 3;
-    else cost = 3 + Math.ceil((dist - 1.5) / 1.5) * 1;
+function selectDelivery(method) {
+  selectedDelivery = method;
+  document.querySelectorAll('#deliveryOption-delivery, #deliveryOption-pickup').forEach(el => el.classList.remove('selected'));
+  document.getElementById('deliveryOption-'+method).classList.add('selected');
+  const addrBlock = document.getElementById('deliveryAddressBlock');
+  const pickupBlock = document.getElementById('pickupAddressBlock');
+  if (method === 'delivery') {
+    addrBlock.style.display = 'block';
+    pickupBlock.style.display = 'none';
+    const addrInput = document.getElementById('coAddress');
+    if (!addrInput.value.startsWith('г. Витебск')) {
+      addrInput.value = 'г. Витебск, ';
+    }
+    updateMapLink();
+  } else {
+    addrBlock.style.display = 'none';
+    pickupBlock.style.display = 'block';
   }
-  document.getElementById('deliveryCostDisplay').textContent = `Стоимость доставки: ${cost.toFixed(2)} BYN`;
+}
+function updateMapLink() {
+  const input = document.getElementById('coAddress');
+  let addr = input.value.trim();
+  if (addr && !addr.toLowerCase().startsWith('г. Витебск')) {
+    addr = 'г. Витебск, ' + addr;
+    input.value = addr;
+  }
+  const link = document.getElementById('mapLink');
+  if (addr) {
+    link.href = `https://yandex.ru/maps/?text=${encodeURIComponent(addr)}`;
+    link.style.display = 'inline';
+  } else {
+    link.style.display = 'none';
+  }
 }
 function openMap() { const addr = document.getElementById('coAddress').value.trim(); if (!addr) { showToast('Введите адрес'); return; } window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(addr)}`, '_blank'); }
 function openPickupMap() { window.open('https://yandex.ru/maps/?text=Витебск%2C%20ул.%20Генерала%20Ивановского%2C%2034', '_blank'); }
+
 function checkoutNext() {
   const name = document.getElementById('coName').value.trim();
   const phone = document.getElementById('coPhone').value.trim();
@@ -746,29 +773,21 @@ function checkoutNext() {
   checkoutData = { name, phone, address, comment: document.getElementById('coComment').value.trim(), delivery: selectedDelivery };
   let summaryHTML = '', total = 0;
   Object.keys(cart).forEach(key => { if (key === '_details') return; const detail = cart._details?.[key]; if (!detail) return; const qty = cart[key]; const sub = detail.price * qty; total += sub; summaryHTML += `<div class="checkout-summary-item"><span>${detail.productName}${detail.variant ? ' ('+detail.variant+')' : ''} × ${qty}</span><span>${formatPrice(sub)}</span></div>`; });
-  const dist = parseFloat(document.getElementById('deliveryDistance').value) || 0;
-  let deliveryCost = 0;
-  if (selectedDelivery === 'delivery') {
-    if (dist <= 1.5) deliveryCost = 3;
-    else deliveryCost = 3 + Math.ceil((dist - 1.5) / 1.5) * 1;
-  }
+  const deliveryCost = selectedDelivery === 'delivery' ? 3 : 0;
   summaryHTML += `<div class="checkout-summary-item"><span>Доставка</span><span>${formatPrice(deliveryCost)}</span></div>`;
   summaryHTML += `<div class="checkout-summary-total"><span>Итого</span><span style="background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${formatPrice(total + deliveryCost)}</span></div>`;
   document.getElementById('checkoutSummary').innerHTML = summaryHTML;
   setCheckoutStep(2);
 }
+
 function checkoutBack() { setCheckoutStep(1); }
 function selectPay(method) { selectedPayMethod = method; document.querySelectorAll('.pay-option').forEach(el => el.classList.remove('selected')); document.getElementById('payOpt-'+method).classList.add('selected'); }
+
 function submitOrder() {
   const items = [];
   Object.keys(cart).forEach(key => { if (key === '_details') return; const detail = cart._details?.[key]; if (!detail) return; const qty = cart[key]; const price = detail.price; const name = detail.variant ? `${detail.productName} (${detail.variant})` : detail.productName; items.push({ id: detail.productId, name: name, qty: qty, price: price }); });
   let total = 0; items.forEach(it => total += it.price * it.qty);
-  const dist = parseFloat(document.getElementById('deliveryDistance').value) || 0;
-  let deliveryCost = 0;
-  if (selectedDelivery === 'delivery') {
-    if (dist <= 1.5) deliveryCost = 3;
-    else deliveryCost = 3 + Math.ceil((dist - 1.5) / 1.5) * 1;
-  }
+  const deliveryCost = selectedDelivery === 'delivery' ? 3 : 0;
   const orderPayload = { type: 'order', items, total, deliveryCost, payment: selectedPayMethod, customer: checkoutData };
   if (window.Telegram?.WebApp?.sendData) { try { window.Telegram.WebApp.sendData(JSON.stringify(orderPayload)); } catch(e) { showToast('Ошибка отправки'); return; } } else { alert('Заказ оформлен!'); }
   profile.name = checkoutData.name; profile.phone = checkoutData.phone; profile.address = checkoutData.address; saveProfile();
@@ -777,7 +796,6 @@ function submitOrder() {
 }
 function closeCheckoutSuccess() { closeModal('checkoutModal'); renderCart(); showPage('home'); }
 
-// Профиль с аватаркой Telegram
 function renderProfile() {
   const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
   if (tg) {
@@ -796,7 +814,6 @@ function renderProfile() {
   document.getElementById('addressVal').textContent = profile.address || 'Не указан';
   document.getElementById('phoneVal').textContent = profile.phone || 'Не указан';
 }
-
 function openEdit(field) { currentEditField = field; const labels = { card:'Номер карты', address:'Адрес доставки', phone:'Номер телефона' }; const titles = { card:'Банковская карта', address:'Адрес доставки', phone:'Телефон' }; document.getElementById('editModalTitle').textContent = titles[field]; document.getElementById('editModalLabel').textContent = labels[field]; document.getElementById('editModalInput').value = profile[field] || ''; document.getElementById('editModal').classList.add('show'); }
 function saveEdit() { if (currentEditField) { profile[currentEditField] = document.getElementById('editModalInput').value.trim(); saveProfile(); renderProfile(); } closeModal('editModal'); showToast('Сохранено ✓'); }
 
@@ -815,18 +832,15 @@ function showAdminCategories() {
   el.innerHTML = categories.map(cat => `<div class="cart-item" style="margin-bottom:6px;"><div style="display:flex;align-items:center;gap:8px;flex:1;">${cat.image ? `<img src="${cat.image}" style="width:32px;height:32px;object-fit:contain;border-radius:6px;">` : `<span style="font-size:24px;">${cat.icon}</span>`}<div><div class="prod-name">${cat.name}</div><div class="prod-desc">${cat.key}</div></div></div><div style="display:flex;gap:6px;"><div class="field-edit" onclick="openEditCategory(${cat.id})">✏️</div><div class="field-edit" style="background:rgba(239,68,68,0.1);color:var(--danger);" onclick="deleteCategory(${cat.id})">🗑️</div></div></div>`).join('');
 }
 function openAddCategory() {
-  document.getElementById('addCatTitle').textContent = 'Новая категория';
-  document.getElementById('editCatId').value = '';
+  document.getElementById('addCatTitle').textContent = 'Новая категория'; document.getElementById('editCatId').value = '';
   document.getElementById('catName').value = ''; document.getElementById('catKey').value = ''; document.getElementById('catEmoji').value = ''; document.getElementById('catImgUrl').value = '';
   document.getElementById('urlPreviewBoxCat').style.display = 'none';
   clearUploadedImageCat(); switchCatImgTab('upload');
   document.getElementById('addCategoryModal').classList.add('show');
 }
 function openEditCategory(id) {
-  const cat = categories.find(c => c.id === id);
-  if (!cat) return;
-  document.getElementById('addCatTitle').textContent = 'Редактировать категорию';
-  document.getElementById('editCatId').value = id;
+  const cat = categories.find(c => c.id === id); if (!cat) return;
+  document.getElementById('addCatTitle').textContent = 'Редактировать категорию'; document.getElementById('editCatId').value = id;
   document.getElementById('catName').value = cat.name; document.getElementById('catKey').value = cat.key; document.getElementById('catEmoji').value = cat.icon || '';
   clearUploadedImageCat();
   if (cat.image && cat.image.startsWith('data:')) {
@@ -861,35 +875,25 @@ function switchCatImgTab(tab) {
   document.getElementById('imgTabUrlCat').classList.toggle('active', tab==='url');
 }
 function handleFileUploadCat(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const file = event.target.files[0]; if (!file) return;
   if (file.size > 10*1024*1024) { showToast('Файл слишком большой (макс. 10MB)'); return; }
   const reader = new FileReader();
-  reader.onload = (e) => {
-    uploadedCatImageBase64 = e.target.result;
-    document.getElementById('uploadPreviewCat').src = uploadedCatImageBase64; document.getElementById('uploadPreviewCat').style.display = 'block';
-    document.getElementById('uploadPlaceholderCat').style.display = 'none'; document.getElementById('uploadAreaCat').classList.add('has-image'); document.getElementById('clearImgBtnCat').style.display = 'block';
-  };
+  reader.onload = (e) => { uploadedCatImageBase64 = e.target.result; document.getElementById('uploadPreviewCat').src=uploadedCatImageBase64; document.getElementById('uploadPreviewCat').style.display='block'; document.getElementById('uploadPlaceholderCat').style.display='none'; document.getElementById('uploadAreaCat').classList.add('has-image'); document.getElementById('clearImgBtnCat').style.display='block'; };
   reader.readAsDataURL(file);
 }
 function clearUploadedImageCat() {
   uploadedCatImageBase64 = '';
-  document.getElementById('uploadPreviewCat').style.display = 'none'; document.getElementById('uploadPreviewCat').src = '';
-  document.getElementById('uploadPlaceholderCat').style.display = 'flex'; document.getElementById('uploadAreaCat').classList.remove('has-image');
-  document.getElementById('clearImgBtnCat').style.display = 'none'; document.getElementById('imgFileInputCat').value = '';
+  document.getElementById('uploadPreviewCat').style.display='none'; document.getElementById('uploadPreviewCat').src='';
+  document.getElementById('uploadPlaceholderCat').style.display='flex'; document.getElementById('uploadAreaCat').classList.remove('has-image');
+  document.getElementById('clearImgBtnCat').style.display='none'; document.getElementById('imgFileInputCat').value = '';
 }
 
 // Товары CRUD
-function populateCatSelect() {
-  const sel = document.getElementById('prodCat');
-  if (!sel) return;
-  sel.innerHTML = categories.map(cat => `<option value="${cat.key}">${cat.icon} ${cat.name}</option>`).join('');
-}
+function populateCatSelect() { const sel = document.getElementById('prodCat'); if (!sel) return; sel.innerHTML = categories.map(cat => `<option value="${cat.key}">${cat.icon} ${cat.name}</option>`).join(''); }
 function openAddProduct() { populateCatSelect(); document.getElementById('addProdTitle').textContent = 'Новый товар'; document.getElementById('editProdId').value = ''; document.getElementById('prodName').value = ''; document.getElementById('prodDesc').value = ''; document.getElementById('prodPrice').value = ''; document.getElementById('prodEmoji').value = ''; document.getElementById('prodImgUrl').value = ''; document.getElementById('urlPreviewBox').style.display = 'none'; clearUploadedImage(); switchImgTab('upload'); document.getElementById('addProductModal').classList.add('show'); }
 function openEditProduct(id) {
   populateCatSelect();
-  const p = products.find(x => x.id === id);
-  if (!p) return;
+  const p = products.find(x => x.id === id); if (!p) return;
   document.getElementById('addProdTitle').textContent = 'Редактировать товар'; document.getElementById('editProdId').value = id;
   document.getElementById('prodName').value = p.name; document.getElementById('prodDesc').value = p.desc; document.getElementById('prodPrice').value = p.price; document.getElementById('prodCat').value = p.cat; document.getElementById('prodEmoji').value = p.emoji || '';
   clearUploadedImage();
@@ -927,8 +931,7 @@ function showAdminProducts() {
 // Изображения (товары)
 function switchImgTab(tab) { currentImgTab = tab; document.querySelectorAll('#addProductModal .img-tab').forEach((t,i)=>{t.classList.toggle('active',(i===0&&tab==='upload')||(i===1&&tab==='url'));}); document.getElementById('imgTabUpload').classList.toggle('active',tab==='upload'); document.getElementById('imgTabUrl').classList.toggle('active',tab==='url'); }
 function handleFileUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const file = event.target.files[0]; if (!file) return;
   if (file.size > 10*1024*1024) { showToast('Файл слишком большой (макс. 10MB)'); return; }
   const reader = new FileReader();
   reader.onload = (e) => { uploadedImageBase64 = e.target.result; document.getElementById('uploadPreview').src=uploadedImageBase64; document.getElementById('uploadPreview').style.display='block'; document.getElementById('uploadPlaceholder').style.display='none'; document.getElementById('uploadArea').classList.add('has-image'); document.getElementById('clearImgBtn').style.display='block'; };
