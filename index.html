@@ -924,7 +924,7 @@ function saveEdit() {
   showToast('Сохранено ✓');
 }
 
-// Админ-панель
+// ========== АДМИН-ПАНЕЛЬ ==========
 function renderAdmin() {
   if (adminUnlocked) {
     document.getElementById('admin-pass-screen').classList.remove('visible');
@@ -974,7 +974,96 @@ function showAdminProducts() {
   document.getElementById('statProducts').textContent = products.length;
 }
 
-// Заглушки для функций изображений (оставлены из предыдущей версии)
+// ========== CRUD ТОВАРОВ ==========
+function openAddProduct() {
+  document.getElementById('addProdTitle').textContent = 'Новый товар';
+  document.getElementById('editProdId').value = '';
+  document.getElementById('prodName').value = '';
+  document.getElementById('prodDesc').value = '';
+  document.getElementById('prodPrice').value = '';
+  document.getElementById('prodCat').value = 'vapes';
+  document.getElementById('prodEmoji').value = '';
+  document.getElementById('prodImgUrl').value = '';
+  document.getElementById('urlPreviewBox').style.display = 'none';
+  clearUploadedImage();
+  switchImgTab('upload');
+  document.getElementById('addProductModal').classList.add('show');
+}
+
+function openEditProduct(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('addProdTitle').textContent = 'Редактировать товар';
+  document.getElementById('editProdId').value = id;
+  document.getElementById('prodName').value = p.name;
+  document.getElementById('prodDesc').value = p.desc;
+  document.getElementById('prodPrice').value = p.price;
+  document.getElementById('prodCat').value = p.cat;
+  document.getElementById('prodEmoji').value = p.emoji || '';
+  clearUploadedImage();
+
+  if (p.image && p.image.startsWith('data:')) {
+    uploadedImageBase64 = p.image;
+    const preview = document.getElementById('uploadPreview');
+    preview.src = p.image;
+    preview.style.display = 'block';
+    document.getElementById('uploadPlaceholder').style.display = 'none';
+    document.getElementById('uploadArea').classList.add('has-image');
+    document.getElementById('clearImgBtn').style.display = 'block';
+    switchImgTab('upload');
+    document.getElementById('prodImgUrl').value = '';
+  } else if (p.image) {
+    document.getElementById('prodImgUrl').value = p.image;
+    const box = document.getElementById('urlPreviewBox');
+    const img = document.getElementById('urlPreview');
+    img.src = p.image;
+    box.style.display = 'block';
+    switchImgTab('url');
+  } else {
+    switchImgTab('upload');
+    document.getElementById('prodImgUrl').value = '';
+  }
+
+  document.getElementById('addProductModal').classList.add('show');
+}
+
+function saveProduct() {
+  const name = document.getElementById('prodName').value.trim();
+  const desc = document.getElementById('prodDesc').value.trim();
+  const price = parseFloat(document.getElementById('prodPrice').value);
+  const cat = document.getElementById('prodCat').value;
+  const emoji = document.getElementById('prodEmoji').value.trim() || catIcons[cat];
+  if (!name || isNaN(price) || price <= 0) { showToast('Заполните название и цену'); return; }
+
+  let image = '';
+  if (currentImgTab === 'upload' && uploadedImageBase64) {
+    image = uploadedImageBase64;
+  } else if (currentImgTab === 'url') {
+    image = document.getElementById('prodImgUrl').value.trim();
+  }
+
+  const editId = document.getElementById('editProdId').value;
+  if (editId) {
+    const idx = products.findIndex(p => p.id == editId);
+    if (idx !== -1) products[idx] = { ...products[idx], name, desc, price, cat, emoji, image };
+  } else {
+    products.push({ id: Date.now(), name, desc, price, cat, emoji, image });
+  }
+  saveProducts();
+  closeModal('addProductModal');
+  showAdminProducts();
+  showToast(editId ? 'Товар обновлён ✓' : 'Товар добавлен ✓');
+}
+
+function deleteProduct(id) {
+  if (!confirm('Удалить этот товар?')) return;
+  products = products.filter(p => p.id !== id);
+  saveProducts();
+  showAdminProducts();
+  showToast('Товар удалён');
+}
+
+// ========== ИЗОБРАЖЕНИЯ ==========
 function switchImgTab(tab) {
   currentImgTab = tab;
   document.querySelectorAll('.img-tab').forEach((t, i) => { t.classList.toggle('active', (i === 0 && tab === 'upload') || (i === 1 && tab === 'url')); });
@@ -1006,12 +1095,23 @@ function clearUploadedImage() {
   document.getElementById('imgFileInput').value = '';
 }
 
-// Пустые функции для CRUD товаров (реализованы в предыдущих ответах, здесь сокращены)
-function openAddProduct() { /* ... */ }
-function openEditProduct(id) { /* ... */ }
-function saveProduct() { /* ... */ }
-function deleteProduct(id) { /* ... */ }
+// ========== СКРЫТИЕ АДМИНКИ ==========
+function initAdminVisibility() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return; // не в Telegram — оставляем панель (для отладки в браузере)
 
+  const user = tg.initDataUnsafe?.user;
+  if (user && user.id && user.id !== ADMIN_ID) {
+    // Точно знаем ID, и он не админский — скрываем
+    const adminPage = document.getElementById('page-admin');
+    const adminNav = document.getElementById('nav-admin');
+    if (adminPage) adminPage.remove();
+    if (adminNav) adminNav.remove();
+  }
+  // Если user не определён — панель остаётся видимой
+}
+
+// ========== УТИЛИТЫ ==========
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1021,17 +1121,7 @@ function showToast(msg) {
 
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-// Скрытие админки для не-админов
-function initAdminVisibility() {
-  const tg = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (!tg || tg.id !== ADMIN_ID) {
-    const adminPage = document.getElementById('page-admin');
-    const adminNav = document.getElementById('nav-admin');
-    if (adminPage) adminPage.remove();
-    if (adminNav) adminNav.remove();
-  }
-}
-
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
 if (window.Telegram?.WebApp) {
   const tg = window.Telegram.WebApp;
   tg.ready();
