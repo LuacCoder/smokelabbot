@@ -1438,6 +1438,16 @@ async function waitForTelegramUser(maxAttempts = 30) {
   return window.Telegram?.WebApp?.initDataUnsafe?.user || null;
 }
 
+// ─── Ожидание Telegram user ──────────────────────────────────────────────
+async function waitForTelegramUser(maxAttempts = 30) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (user && user.id) return user;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return window.Telegram?.WebApp?.initDataUnsafe?.user || null;
+}
+
 // ─── Новая инициализация ─────────────────────────────────────────────────
 async function init() {
   try {
@@ -1446,14 +1456,11 @@ async function init() {
     console.warn('Загрузка данных не удалась:', e);
   }
 
-  // Принудительно дожидаемся юзера Telegram
   const tgUser = await waitForTelegramUser();
   if (tgUser) {
-    // Обновим профиль и покажем админку, если нужно
     renderProfile();
     initAdminVisibility();
   } else {
-    // Если совсем нет юзера (браузер), просто рисуем базовый профиль
     renderProfile();
   }
 
@@ -1461,7 +1468,6 @@ async function init() {
   renderHome();
 }
 
-// Запуск остаётся прежним
 init();
 </script>
 </body>
