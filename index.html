@@ -903,7 +903,7 @@ function checkoutNext() {
     </div>`;
   });
 
-  const deliveryCost = selectedDelivery === 'delivery' ? 3 : 0;
+  const deliveryCost = selectedDelivery === 'delivery' ? 5 : 0;
   summaryHTML += `<div class="checkout-summary-item"><span>Доставка</span><span>${formatPrice(deliveryCost)}</span></div>`;
   summaryHTML += `<div class="checkout-summary-total">
     <span>Итого</span>
