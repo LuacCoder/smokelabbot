@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # Конфигурация
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8160958113"))
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")
 
@@ -194,7 +195,6 @@ def format_items(items):
     return "\n".join(f"  • {it['name']} × {it['qty']} = {it['price'] * it['qty']:.2f} BYN" for it in items)
 
 def build_address_link(address: str) -> str:
-    """Возвращает HTML-ссылку на Яндекс.Карты по адресу."""
     encoded = address.replace(" ", "%20")
     return f'<a href="https://yandex.ru/maps/?text={encoded}">{address}</a>'
 
@@ -273,7 +273,7 @@ async def show_orders(msg: Message):
 async def btn_about(msg: Message):
     await msg.answer("<b>SMOKELAB</b> 💨\n\nЛучший выбор вейп-продуктов в Беларуси.\n📍 г. Витебск, ул. Генерала Ивановского, 34\n🕐 9:00 – 22:00\n💬 @smokelab_support")
 
-# --- Обработка данных из Mini App (заказы и рассылка) ---
+# --- Обработка данных из Mini App ---
 @dp.message(F.web_app_data)
 async def handle_web_app_data(msg: Message):
     try:
@@ -299,7 +299,7 @@ async def process_order(msg: Message, data: dict):
     user = msg.from_user
     now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
 
-    add_user(user)  # сохраняем пользователя для рассылки
+    add_user(user)
 
     order_num = get_next_order_number()
     order_data = {
@@ -317,16 +317,9 @@ async def process_order(msg: Message, data: dict):
     }
     save_order(order_data)
 
-    # Сообщение пользователю
     order = get_order(order_num)
-    sent_msg = await msg.answer(user_order_text(order), reply_markup=kb_main())
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute("UPDATE orders SET user_message_id = ? WHERE order_num = ?", (sent_msg.message_id, order_num))
-    conn.commit()
-    conn.close()
+    await msg.answer(user_order_text(order), reply_markup=kb_main())
 
-    # Уведомление администратору
     if ADMIN_ID:
         try:
             await bot.send_message(
@@ -358,7 +351,7 @@ async def process_broadcast(msg: Message, data: dict):
             log.warning(f"Не удалось отправить сообщение пользователю {uid}: {e}")
     await bot.send_message(ADMIN_ID, f"Рассылка завершена: {success}/{len(user_ids)} пользователей получили сообщение.")
 
-# --- Смена статуса (inline-кнопки) ---
+# --- Смена статуса ---
 @dp.callback_query(F.data.startswith("st:"))
 async def handle_status(call: CallbackQuery):
     if call.from_user.id != ADMIN_ID:
@@ -375,25 +368,13 @@ async def handle_status(call: CallbackQuery):
     update_order_status(order_num, new_status)
     updated_order = get_order(order_num)
 
-    # Уведомление пользователю: сначала пробуем отредактировать, если не получается – отправляем новое
-    user_notified = False
-    if updated_order["user_message_id"]:
-        try:
-            await bot.edit_message_text(
-                user_order_text(updated_order),
-                chat_id=updated_order["user_id"],
-                message_id=updated_order["user_message_id"]
-            )
-            user_notified = True
-        except Exception as e:
-            log.warning("Не удалось отредактировать сообщение пользователю: %s", e)
-    if not user_notified:
-        try:
-            await bot.send_message(updated_order["user_id"], user_order_text(updated_order))
-        except Exception as e:
-            log.error("Не удалось уведомить пользователя: %s", e)
+    # Всегда отправляем новое сообщение пользователю
+    try:
+        await bot.send_message(updated_order["user_id"], user_order_text(updated_order))
+    except Exception as e:
+        log.error("Не удалось уведомить пользователя: %s", e)
 
-    # Обновляем сообщение админу (убираем кнопки для финальных статусов)
+    # Обновляем сообщение админу
     final_statuses = ["done", "cancelled"]
     reply_markup = None if new_status in final_statuses else call.message.reply_markup
     await call.message.edit_text(
@@ -402,7 +383,7 @@ async def handle_status(call: CallbackQuery):
     )
     await call.answer(f"Статус изменён на «{STATUS_INFO[new_status]}»")
 
-# --- Админ-команды (оставлены для совместимости) ---
+# --- Админ-команды ---
 @dp.message(Command("admin"))
 async def cmd_admin(msg: Message):
     if msg.from_user.id != ADMIN_ID:
@@ -460,4 +441,5 @@ async def main():
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
+    time.sleep(2)  # небольшая задержка для корректного перезапуска на Render
     asyncio.run(main())
