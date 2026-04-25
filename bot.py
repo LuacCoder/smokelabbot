@@ -1,7 +1,7 @@
 """
 SMOKELAB Telegram Bot — aiogram 3.x
 Хостинг: Render (бесплатный Web Service)
-Функции: приём заказов из Mini App, управление заказами админом (через Mini App или inline-кнопки), SQLite, HTTP API.
+Функции: приём заказов из Mini App, управление заказами админом (через Mini App + inline-кнопки), SQLite, HTTP API.
 """
 
 import asyncio
@@ -412,6 +412,7 @@ async def cmd_orders_active(msg: Message):
 async def cmd_order_status(msg: Message):
     if msg.from_user.id != ADMIN_ID:
         return await msg.answer("⛔ Нет доступа.")
+    # Простейшая реализация: просим ввести номер заказа и новый статус
     await msg.answer(
         "Формат: <code>/set_status #000001 accepted</code>\n\n"
         "Доступные статусы: accepted, shipping, done, cancelled",
@@ -440,7 +441,7 @@ async def cmd_set_status(msg: Message):
     except Exception as e:
         log.error("Не удалось уведомить пользователя: %s", e)
 
-# ───────────────────────────────── HTTP API для Mini App ──────────────────────
+# ─── HTTP API для Mini App ────────────────────────────────────────────────────
 async def api_get_orders(request):
     """Возвращает список заказов: для админа — все активные, для клиента — его заказы."""
     user_id = request.query.get('user_id')
@@ -460,10 +461,18 @@ async def api_get_orders(request):
             "items": o["items"],
             "customer": o["customer"]
         })
-    return web.json_response(result)
+    resp = web.json_response(result)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 async def api_update_status(request):
     """Изменяет статус заказа (требуется пароль администратора)."""
+    if request.method == 'OPTIONS':
+        resp = web.Response()
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return resp
+
     try:
         data = await request.json()
     except:
@@ -473,7 +482,7 @@ async def api_update_status(request):
     order_num = data.get("order_num")
     new_status = data.get("status")
 
-    if password != "1234":  # пароль, как в Mini App (ADMIN_PASS)
+    if password != "1234":
         return web.json_response({"error": "Unauthorized"}, status=403)
     if new_status not in STATUS_INFO:
         return web.json_response({"error": "Invalid status"}, status=400)
@@ -485,13 +494,14 @@ async def api_update_status(request):
     update_order_status(order_num, new_status)
     label, user_text = STATUS_INFO[new_status]
 
-    # Уведомление клиенту
     try:
         await bot.send_message(order["user_id"], user_text.format(num=order_num))
     except Exception as e:
         log.error("Не удалось уведомить пользователя: %s", e)
 
-    return web.json_response({"success": True, "status": label})
+    resp = web.json_response({"success": True, "status": label})
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 async def run_web_server():
     app = web.Application()
@@ -513,11 +523,13 @@ async def main():
     ])
     log.info("SMOKELAB Bot запускается | ADMIN_ID=%s", ADMIN_ID)
 
-    # Запускаем веб-сервер и поллинг параллельно
-    await asyncio.gather(
-        run_web_server(),
-        dp.start_polling(bot, skip_updates=True)
-    )
+    try:
+        await asyncio.gather(
+            run_web_server(),
+            dp.start_polling(bot, skip_updates=True)
+        )
+    finally:
+        await bot.session.close()
 
 if __name__ == "__main__":
     import time
