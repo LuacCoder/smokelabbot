@@ -31,7 +31,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # ─── КОНФИГУРАЦИЯ (переменные окружения) ──────────────────────────────────────
 BOT_TOKEN    = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
 ADMIN_ID     = int(os.getenv("ADMIN_ID", "8160958113"))
-MINI_APP_URL = os.getenv("MINI_APP_URL", "")  # GitHub Pages URL или аналогичный
+MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")  # GitHub Pages URL или аналогичный
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не задан! Добавьте его в переменные окружения.")
