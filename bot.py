@@ -363,28 +363,38 @@ async def handle_status(call: CallbackQuery):
         await call.answer("Статус уже установлен")
         return
 
+    # Обновляем статус в БД
     update_order_status(order_num, new_status)
 
-    if order["user_message_id"]:
+    # Обновляем сообщение пользователю
+    updated_order = get_order(order_num)
+    if updated_order["user_message_id"]:
         try:
             await bot.edit_message_text(
-                user_order_text(get_order(order_num)),
-                chat_id=order["user_id"],
-                message_id=order["user_message_id"]
+                user_order_text(updated_order),
+                chat_id=updated_order["user_id"],
+                message_id=updated_order["user_message_id"]
             )
         except Exception as e:
-            log.warning("Не удалось отредактировать сообщение пользователю: %s", e)
-
-    if new_status == "cancelled":
-        await call.message.edit_text(
-            call.message.html_text + f"\n\n<b>Статус: {STATUS_INFO[new_status]}</b>",
-            reply_markup=None
-        )
+            log.warning("Не удалось отредактировать сообщение пользователю, отправляю новое: %s", e)
+            try:
+                await bot.send_message(updated_order["user_id"], user_order_text(updated_order))
+            except Exception as e2:
+                log.error("Не удалось уведомить пользователя: %s", e2)
     else:
-        await call.message.edit_text(
-            call.message.html_text + f"\n\n<b>Статус: {STATUS_INFO[new_status]}</b>",
-            reply_markup=call.message.reply_markup
-        )
+        # Если по какой-то причине нет user_message_id, отправляем новое
+        try:
+            await bot.send_message(updated_order["user_id"], user_order_text(updated_order))
+        except Exception as e:
+            log.error("Не удалось уведомить пользователя: %s", e)
+
+    # Обновляем сообщение администратору (с кнопками или без)
+    final_statuses = ["done", "cancelled"]
+    reply_markup = None if new_status in final_statuses else call.message.reply_markup
+    await call.message.edit_text(
+        call.message.html_text + f"\n\n<b>Статус изменён на:</b> {STATUS_INFO[new_status]}",
+        reply_markup=reply_markup
+    )
 
     await call.answer(f"Статус изменён на «{STATUS_INFO[new_status]}»")
 
