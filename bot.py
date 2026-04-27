@@ -1,8 +1,8 @@
 """
 SMOKELAB Telegram Bot — aiogram 3.x
-Хостинг: Render (Web Service, не Worker!)
-Добавлено: фиксированная доставка 5 BYN, отображение username, убран криптоспособ оплаты,
-номер телефона необязательный, управление остатками товаров (stock) в админ-панели.
+Хостинг: Render (Web Service)
+Фиксированная доставка 5 BYN, управление остатками в вариантах.
+База данных: data/orders.db
 """
 
 import asyncio, hashlib, hmac, json, logging, os, sqlite3, time, urllib.parse
@@ -22,12 +22,14 @@ from aiohttp import web
 
 # ── Конфигурация ──────────────────────────────────────────────────────────────
 BOT_TOKEN    = os.getenv("BOT_TOKEN", "8738864601:AAGvTSRtkU-LBe-b7HREagxhbfo6g0miFXU")
-ADMIN_ID     = int(os.getenv("ADMIN_ID", "8160958113"))   # ← твой ID
+ADMIN_ID     = int(os.getenv("ADMIN_ID", "8160958113"))
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://luaccoder.github.io/smokelabbot/")
 PORT         = int(os.getenv("PORT", "8080"))
 
 BASE_DIR = Path(__file__).parent
-DB_FILE  = BASE_DIR / "orders.db"
+DB_DIR   = BASE_DIR / "data"
+DB_DIR.mkdir(exist_ok=True)          # создаём папку data, если её нет
+DB_FILE  = DB_DIR / "orders.db"      # путь к БД внутри папки data
 
 logging.basicConfig(
     level=logging.INFO,
@@ -97,7 +99,7 @@ def init_db() -> None:
                 sort     INTEGER DEFAULT 0
             );
         """)
-        # Добавляем дефолтные категории, если таблица пустая
+        # Дефолтные категории
         count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
         if count == 0:
             conn.executemany(
@@ -109,7 +111,7 @@ def init_db() -> None:
                     ("accessories", "Расходники", "🔧"),
                 ],
             )
-        # Добавляем дефолтные товары, если таблица пустая
+        # Дефолтные товары с полем stock
         pcount = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
         if pcount == 0:
             conn.executemany(
@@ -134,9 +136,6 @@ def init_db() -> None:
                 ],
             )
         conn.commit()
-
-
-def _row(row): return dict(row) if row else None
 
 def add_user(user) -> None:
     with sqlite3.connect(DB_FILE) as conn:
@@ -238,7 +237,7 @@ def db_delete_category(cat_id: int) -> None:
         conn.execute("DELETE FROM categories WHERE id=?", (cat_id,))
         conn.commit()
 
-# ── CRUD товаров ──────────────────────────────────────────────────────────────
+# ── CRUD товаров (с поддержкой stock) ─────────────────────────────────────────
 def db_get_products() -> list:
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
@@ -246,23 +245,28 @@ def db_get_products() -> list:
     result = []
     for r in rows:
         p = dict(r)
-        p["variants"] = json.loads(p.get("variants") or "[]")
+        variants = json.loads(p.get("variants") or "[]")
+        # Убедимся, что каждый вариант имеет поле stock
+        for v in variants:
+            if "stock" not in v:
+                v["stock"] = 0
+        p["variants"] = variants
         result.append(p)
     return result
 
-def db_save_product(cat_key,name,desc,price,emoji,image,variants,prod_id=None) -> int:
+def db_save_product(cat_key, name, desc, price, emoji, image, variants, prod_id=None) -> int:
     v_json = json.dumps(variants, ensure_ascii=False)
     with sqlite3.connect(DB_FILE) as conn:
         if prod_id:
             conn.execute(
                 "UPDATE products SET cat_key=?,name=?,desc=?,price=?,emoji=?,image=?,variants=? WHERE id=?",
-                (cat_key,name,desc,price,emoji,image,v_json,prod_id)
+                (cat_key, name, desc, price, emoji, image, v_json, prod_id)
             )
             rowid = prod_id
         else:
             cur = conn.execute(
                 "INSERT INTO products (cat_key,name,desc,price,emoji,image,variants) VALUES (?,?,?,?,?,?,?)",
-                (cat_key,name,desc,price,emoji,image,v_json)
+                (cat_key, name, desc, price, emoji, image, v_json)
             )
             rowid = cur.lastrowid
         conn.commit()
@@ -273,10 +277,8 @@ def db_delete_product(prod_id: int) -> None:
         conn.execute("DELETE FROM products WHERE id=?", (prod_id,))
         conn.commit()
 
-
 # ── Telegram initData верификация ─────────────────────────────────────────────
 def verify_init_data(init_data: str) -> dict | None:
-    """Возвращает dict пользователя если initData валидна, иначе None."""
     if not init_data:
         return None
     try:
@@ -292,7 +294,6 @@ def verify_init_data(init_data: str) -> dict | None:
     if not hmac.compare_digest(computed, received_hash):
         return None
     return json.loads(parsed.get("user", "{}"))
-
 
 # ── Web API (aiohttp) ─────────────────────────────────────────────────────────
 async def handle_options(request: web.Request) -> web.Response:
@@ -342,6 +343,16 @@ async def api_save_product(request: web.Request) -> web.Response:
         name = str(d.get("name","")).strip()
         if not name:
             return web.json_response({"error":"name required"},status=400,headers=CORS_HEADERS)
+        # Принимаем variants с полями name, price, stock
+        variants = d.get("variants", [])
+        clean_variants = []
+        for v in variants:
+            if isinstance(v, dict) and v.get("name"):
+                clean_variants.append({
+                    "name": str(v["name"]),
+                    "price": float(v.get("price", 0)),
+                    "stock": int(v.get("stock", 0))
+                })
         new_id = db_save_product(
             cat_key  = str(d.get("cat","")).strip(),
             name     = name,
@@ -349,7 +360,7 @@ async def api_save_product(request: web.Request) -> web.Response:
             price    = float(d.get("price", 0)),
             emoji    = str(d.get("emoji","📦")).strip(),
             image    = str(d.get("image","")).strip(),
-            variants = d.get("variants", []),
+            variants = clean_variants,
             prod_id  = prod_id,
         )
         return web.json_response({"ok": True, "id": new_id}, headers=CORS_HEADERS)
@@ -372,10 +383,8 @@ def create_web_app() -> web.Application:
     app.router.add_post  ("/api/admin/product",       api_save_product)
     app.router.add_delete("/api/admin/product/{id}",  api_delete_product)
     app.router.add_route ("OPTIONS", "/{path_info:.*}", handle_options)
-    # Health-check для Render
     app.router.add_get("/", lambda r: web.Response(text="SMOKELAB bot is running ✓"))
     return app
-
 
 # ── Клавиатуры ────────────────────────────────────────────────────────────────
 def kb_main() -> ReplyKeyboardMarkup:
@@ -395,7 +404,6 @@ def kb_admin_order(order_num: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="❌ Отменён",  callback_data=f"st:{order_num}:cancelled"),
         ],
     ])
-
 
 # ── Форматирование ────────────────────────────────────────────────────────────
 PAY_LABELS = {
@@ -429,12 +437,11 @@ def user_order_text(order: dict) -> str:
     payment_label = PAY_LABELS.get(order["payment"], order["payment"])
     comment_line  = f"💬 {customer['comment']}\n" if customer.get("comment") else ""
     receipt_line  = f"📋 Чек: {customer['receiptNote']}\n" if customer.get("receiptNote") else ""
-    # Для самовывоза адрес выводим как есть (без ссылки)
     if customer.get("delivery") == "pickup":
         addr_str = customer.get("address", "—")
     else:
         addr_str = build_address_link(customer.get("address", "—"))
-
+    phone_line = f"📱 {customer['phone']}\n" if customer.get("phone") else ""
     return (
         f"🎉 <b>Заказ {order['order_num']}</b>\n\n"
         f"<b>Состав:</b>\n{items_text}\n\n"
@@ -444,7 +451,7 @@ def user_order_text(order: dict) -> str:
         f"<b>Оплата:</b> {payment_label}\n\n"
         f"<b>Получатель:</b>\n"
         f"👤 {customer.get('name', '—')}\n"
-        f"{'📱 ' + customer.get('phone', '—') + '\n' if customer.get('phone') else ''}"
+        f"{phone_line}"
         f"🏠 {addr_str}\n"
         f"{comment_line}"
         f"{receipt_line}\n"
@@ -459,19 +466,18 @@ def admin_notification_text(order: dict) -> str:
     payment_label = PAY_LABELS.get(order["payment"], order["payment"])
     comment_line  = f"💬 {customer['comment']}\n" if customer.get("comment") else ""
     receipt_line  = f"📋 Чек: {customer['receiptNote']}\n" if customer.get("receiptNote") else ""
-    # Для самовывоза адрес выводим как есть (без ссылки)
     if customer.get("delivery") == "pickup":
         addr_str = customer.get("address", "—")
     else:
         addr_str = build_address_link(customer.get("address", "—"))
-    # Показываем username, если есть
+    phone_line = f"📱 {customer['phone']}\n" if customer.get("phone") else ""
     username_info = f" (@{order['username']})" if order.get('username') else ""
     return (
         f"🔔 <b>НОВЫЙ ЗАКАЗ {order['order_num']}</b>\n"
         f"🕐 {order['created_at']}\n\n"
         f"<b>Клиент:</b> {order['full_name']}{username_info} (ID: {order['user_id']})\n"
         f"👤 {customer.get('name', '—')}\n"
-        f"{'📱 ' + customer.get('phone', '—') + '\n' if customer.get('phone') else ''}"
+        f"{phone_line}"
         f"🏠 {addr_str}\n"
         f"{comment_line}"
         f"{receipt_line}\n"
@@ -482,11 +488,10 @@ def admin_notification_text(order: dict) -> str:
         f"<b>Оплата:</b> {payment_label}"
     )
 
-
 # ── Хэндлеры ──────────────────────────────────────────────────────────────────
 @dp.message(CommandStart())
 async def cmd_start(msg: Message) -> None:
-    add_user(msg.from_user)   # ← регистрируем для рассылки сразу при /start
+    add_user(msg.from_user)
     name = msg.from_user.first_name or "друг"
     await msg.answer(
         f"👋 Привет, <b>{name}</b>!\n\n"
@@ -533,7 +538,6 @@ async def btn_about(msg: Message) -> None:
         "💬 @smokelab_support"
     )
 
-# ── Web App данные ────────────────────────────────────────────────────────────
 @dp.message(F.web_app_data)
 async def handle_web_app_data(msg: Message) -> None:
     try:
@@ -541,7 +545,6 @@ async def handle_web_app_data(msg: Message) -> None:
     except json.JSONDecodeError:
         await msg.answer("⚠️ Ошибка при обработке данных.")
         return
-
     t = data.get("type")
     if t == "order":
         await process_order(msg, data)
@@ -598,7 +601,6 @@ async def process_broadcast(msg: Message, data: dict) -> None:
     await bot.send_message(ADMIN_ID,
                            f"✅ Рассылка завершена: {success}/{len(user_ids)} получили сообщение.")
 
-# ── Смена статуса ─────────────────────────────────────────────────────────────
 @dp.callback_query(F.data.startswith("st:"))
 async def handle_status(call: CallbackQuery) -> None:
     if call.from_user.id != ADMIN_ID:
@@ -626,7 +628,6 @@ async def handle_status(call: CallbackQuery) -> None:
     )
     await call.answer(f"Готово: {STATUS_INFO[new_status]}")
 
-# ── Админ-команды ─────────────────────────────────────────────────────────────
 @dp.message(Command("admin"))
 async def cmd_admin(msg: Message) -> None:
     if msg.from_user.id != ADMIN_ID: return
@@ -670,28 +671,20 @@ async def cmd_set_status(msg: Message) -> None:
     update_order_status(order_num, status)
     await msg.answer(f"✅ Статус заказа {order_num} → {STATUS_INFO[status]}")
 
-
-# ── Запуск ────────────────────────────────────────────────────────────────────
 async def main() -> None:
     init_db()
-
     await bot.set_my_commands([
         BotCommand(command="start",  description="Главное меню"),
         BotCommand(command="orders", description="Мои заказы"),
         BotCommand(command="help",   description="Помощь"),
     ])
-
-    # Запускаем веб-сервер (API для Mini App)
-    app     = create_web_app()
-    runner  = web.AppRunner(app)
+    app = create_web_app()
+    runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
     log.info("SMOKELAB Bot запускается | ADMIN_ID=%s | PORT=%s", ADMIN_ID, PORT)
-
-    # Запускаем бот (параллельно с веб-сервером)
     await dp.start_polling(bot, skip_updates=True)
-
 
 if __name__ == "__main__":
     time.sleep(2)
