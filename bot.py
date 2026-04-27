@@ -1,6 +1,8 @@
 """
 SMOKELAB Telegram Bot — aiogram 3.x
 Хостинг: Render (Web Service, не Worker!)
+Добавлено: фиксированная доставка 5 BYN, отображение username, убран криптоспособ оплаты,
+номер телефона необязательный, управление остатками товаров (stock) в админ-панели.
 """
 
 import asyncio, hashlib, hmac, json, logging, os, sqlite3, time, urllib.parse
@@ -114,21 +116,21 @@ def init_db() -> None:
                 "INSERT OR IGNORE INTO products (cat_key,name,desc,price,emoji,variants) VALUES (?,?,?,?,?,?)",
                 [
                     ("vapes","ELFBAR 5000","5000 затяжек, богатый выбор вкусов",19.90,"💨",
-                     '[{"name":"Чёрный","price":19.90},{"name":"Белый","price":19.90}]'),
+                     '[{"name":"Чёрный","price":19.90,"stock":10},{"name":"Белый","price":19.90,"stock":5}]'),
                     ("vapes","LOST MARY OS5000","Компактный, долгоиграющий",21.50,"🌊",
-                     '[{"name":"Чёрный","price":21.50},{"name":"Красный","price":21.50}]'),
+                     '[{"name":"Чёрный","price":21.50,"stock":7},{"name":"Красный","price":21.50,"stock":0}]'),
                     ("liquids","Liquid Salt Nic 30мл","Солевая жидкость, 20мг",9.90,"🧪",
-                     '[{"name":"Манго","price":9.90},{"name":"Клубника","price":9.90}]'),
+                     '[{"name":"Манго","price":9.90,"stock":12},{"name":"Клубника","price":9.90,"stock":8}]'),
                     ("liquids","Big Tasty Mango","Фруктовая жидкость 60мл",12.50,"🍋",
-                     '[{"name":"Манго","price":12.50},{"name":"Ананас","price":12.50}]'),
+                     '[{"name":"Манго","price":12.50,"stock":6},{"name":"Ананас","price":12.50,"stock":4}]'),
                     ("snus","Killa Cola Ice","Снюс с охлаждением, 20mg",6.90,"❄️",
-                     '[{"name":"Кола","price":6.90},{"name":"Мята","price":6.90}]'),
+                     '[{"name":"Кола","price":6.90,"stock":20},{"name":"Мята","price":6.90,"stock":15}]'),
                     ("snus","Lyft Mint","Мятный снюс, 8mg",5.50,"🍃",
-                     '[{"name":"Мята","price":5.50}]'),
+                     '[{"name":"Мята","price":5.50,"stock":25}]'),
                     ("accessories","Испаритель Smok V8","Совместим с Smok TFV8",4.90,"🔧",
-                     '[{"name":"0.15 Ohm","price":4.90},{"name":"0.2 Ohm","price":4.90}]'),
+                     '[{"name":"0.15 Ohm","price":4.90,"stock":30},{"name":"0.2 Ohm","price":4.90,"stock":30}]'),
                     ("accessories","Ватные фитили","Японский хлопок 10 листов",3.50,"🌸",
-                     '[{"name":"Стандарт","price":3.50}]'),
+                     '[{"name":"Стандарт","price":3.50,"stock":40}]'),
                 ],
             )
         conn.commit()
@@ -399,8 +401,6 @@ def kb_admin_order(order_num: str) -> InlineKeyboardMarkup:
 PAY_LABELS = {
     "cash":   "💵 Наличными",
     "card":   "💳 Банковская карта",
-    "crypto": "₿ Криптовалюта",
-    "pickup": "🏪 Самовывоз",
 }
 STATUS_INFO = {
     "pending":   "⏳ Ожидает",
@@ -429,21 +429,22 @@ def user_order_text(order: dict) -> str:
     payment_label = PAY_LABELS.get(order["payment"], order["payment"])
     comment_line  = f"💬 {customer['comment']}\n" if customer.get("comment") else ""
     receipt_line  = f"📋 Чек: {customer['receiptNote']}\n" if customer.get("receiptNote") else ""
-    addr_str      = build_address_link(customer.get("address", "—"))
-    delivery_km   = customer.get("deliveryKm", 0)
-    km_line       = f"📏 Расстояние: {delivery_km} км\n" if delivery_km else ""
+    # Для самовывоза адрес выводим как есть (без ссылки)
+    if customer.get("delivery") == "pickup":
+        addr_str = customer.get("address", "—")
+    else:
+        addr_str = build_address_link(customer.get("address", "—"))
 
     return (
         f"🎉 <b>Заказ {order['order_num']}</b>\n\n"
         f"<b>Состав:</b>\n{items_text}\n\n"
         f"<b>Сумма товаров:</b> {order['total']:.2f} BYN\n"
         f"<b>Доставка:</b> {delivery_cost:.2f} BYN\n"
-        f"{km_line}"
         f"<b>Итого:</b> {total:.2f} BYN\n\n"
         f"<b>Оплата:</b> {payment_label}\n\n"
         f"<b>Получатель:</b>\n"
         f"👤 {customer.get('name', '—')}\n"
-        f"📱 {customer.get('phone', '—')}\n"
+        f"{'📱 ' + customer.get('phone', '—') + '\n' if customer.get('phone') else ''}"
         f"🏠 {addr_str}\n"
         f"{comment_line}"
         f"{receipt_line}\n"
@@ -458,21 +459,20 @@ def admin_notification_text(order: dict) -> str:
     payment_label = PAY_LABELS.get(order["payment"], order["payment"])
     comment_line  = f"💬 {customer['comment']}\n" if customer.get("comment") else ""
     receipt_line  = f"📋 Чек: {customer['receiptNote']}\n" if customer.get("receiptNote") else ""
-    delivery_km   = customer.get("deliveryKm", 0)
-    km_line       = f"📏 Расстояние: {delivery_km} км\n" if delivery_km else ""
-    addr_str = (
-        customer.get("address", "—")
-        if customer.get("delivery") == "pickup"
-        else build_address_link(customer.get("address", "—"))
-    )
+    # Для самовывоза адрес выводим как есть (без ссылки)
+    if customer.get("delivery") == "pickup":
+        addr_str = customer.get("address", "—")
+    else:
+        addr_str = build_address_link(customer.get("address", "—"))
+    # Показываем username, если есть
+    username_info = f" (@{order['username']})" if order.get('username') else ""
     return (
         f"🔔 <b>НОВЫЙ ЗАКАЗ {order['order_num']}</b>\n"
         f"🕐 {order['created_at']}\n\n"
-        f"<b>Клиент:</b> {order['full_name']} (ID: {order['user_id']})\n"
+        f"<b>Клиент:</b> {order['full_name']}{username_info} (ID: {order['user_id']})\n"
         f"👤 {customer.get('name', '—')}\n"
-        f"📱 {customer.get('phone', '—')}\n"
+        f"{'📱 ' + customer.get('phone', '—') + '\n' if customer.get('phone') else ''}"
         f"🏠 {addr_str}\n"
-        f"{km_line}"
         f"{comment_line}"
         f"{receipt_line}\n"
         f"<b>Состав:</b>\n{items_text}\n\n"
