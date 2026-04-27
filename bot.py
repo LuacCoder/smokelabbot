@@ -1,7 +1,6 @@
 """
 SMOKELAB Telegram Bot — aiogram 3.x
-Хостинг: Render (Web Service)
-Фиксированная доставка 5 BYN, управление остатками в вариантах.
+Фиксированная доставка 5 BYN, управление остатками, логирование API.
 База данных: data/orders.db
 """
 
@@ -28,11 +27,11 @@ PORT         = int(os.getenv("PORT", "8080"))
 
 BASE_DIR = Path(__file__).parent
 DB_DIR   = BASE_DIR / "data"
-DB_DIR.mkdir(exist_ok=True)          # создаём папку data, если её нет
-DB_FILE  = DB_DIR / "orders.db"      # путь к БД внутри папки data
+DB_DIR.mkdir(exist_ok=True)
+DB_FILE  = DB_DIR / "orders.db"
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,   # Для продакшена INFO, при отладке можно DEBUG
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.FileHandler(BASE_DIR / "bot.log", encoding="utf-8"),
@@ -50,8 +49,9 @@ CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Init-Data",
 }
 
-# ── База данных ───────────────────────────────────────────────────────────────
+# ── Инициализация базы данных ─────────────────────────────────────────────────
 def init_db() -> None:
+    log.info("Инициализация БД: %s", DB_FILE)
     with sqlite3.connect(DB_FILE) as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS orders (
@@ -102,6 +102,7 @@ def init_db() -> None:
         # Дефолтные категории
         count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
         if count == 0:
+            log.info("Создание дефолтных категорий")
             conn.executemany(
                 "INSERT OR IGNORE INTO categories (key, name, icon) VALUES (?,?,?)",
                 [
@@ -114,29 +115,33 @@ def init_db() -> None:
         # Дефолтные товары с полем stock
         pcount = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
         if pcount == 0:
+            log.info("Создание дефолтных товаров")
             conn.executemany(
                 "INSERT OR IGNORE INTO products (cat_key,name,desc,price,emoji,variants) VALUES (?,?,?,?,?,?)",
                 [
-                    ("vapes","ELFBAR 5000","5000 затяжек, богатый выбор вкусов",19.90,"💨",
+                    ("vapes","ELFBAR 5000","5000 затяжек, вкусы",19.90,"💨",
                      '[{"name":"Чёрный","price":19.90,"stock":10},{"name":"Белый","price":19.90,"stock":5}]'),
-                    ("vapes","LOST MARY OS5000","Компактный, долгоиграющий",21.50,"🌊",
+                    ("vapes","LOST MARY OS5000","Компактный",21.50,"🌊",
                      '[{"name":"Чёрный","price":21.50,"stock":7},{"name":"Красный","price":21.50,"stock":0}]'),
-                    ("liquids","Liquid Salt Nic 30мл","Солевая жидкость, 20мг",9.90,"🧪",
+                    ("liquids","Liquid Salt Nic 30мл","Солевая жидкость",9.90,"🧪",
                      '[{"name":"Манго","price":9.90,"stock":12},{"name":"Клубника","price":9.90,"stock":8}]'),
-                    ("liquids","Big Tasty Mango","Фруктовая жидкость 60мл",12.50,"🍋",
+                    ("liquids","Big Tasty Mango","Фруктовая",12.50,"🍋",
                      '[{"name":"Манго","price":12.50,"stock":6},{"name":"Ананас","price":12.50,"stock":4}]'),
-                    ("snus","Killa Cola Ice","Снюс с охлаждением, 20mg",6.90,"❄️",
+                    ("snus","Killa Cola Ice","Снюс с охлаждением",6.90,"❄️",
                      '[{"name":"Кола","price":6.90,"stock":20},{"name":"Мята","price":6.90,"stock":15}]'),
-                    ("snus","Lyft Mint","Мятный снюс, 8mg",5.50,"🍃",
+                    ("snus","Lyft Mint","Мятный снюс",5.50,"🍃",
                      '[{"name":"Мята","price":5.50,"stock":25}]'),
                     ("accessories","Испаритель Smok V8","Совместим с Smok TFV8",4.90,"🔧",
                      '[{"name":"0.15 Ohm","price":4.90,"stock":30},{"name":"0.2 Ohm","price":4.90,"stock":30}]'),
-                    ("accessories","Ватные фитили","Японский хлопок 10 листов",3.50,"🌸",
+                    ("accessories","Ватные фитили","Японский хлопок",3.50,"🌸",
                      '[{"name":"Стандарт","price":3.50,"stock":40}]'),
                 ],
             )
         conn.commit()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        log.info("Таблицы в БД: %s", [t[0] for t in tables])
 
+# ── Вспомогательные функции работы с БД ──────────────────────────────────────
 def add_user(user) -> None:
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute(
@@ -246,7 +251,6 @@ def db_get_products() -> list:
     for r in rows:
         p = dict(r)
         variants = json.loads(p.get("variants") or "[]")
-        # Убедимся, что каждый вариант имеет поле stock
         for v in variants:
             if "stock" not in v:
                 v["stock"] = 0
@@ -295,12 +299,13 @@ def verify_init_data(init_data: str) -> dict | None:
         return None
     return json.loads(parsed.get("user", "{}"))
 
-# ── Web API (aiohttp) ─────────────────────────────────────────────────────────
+# ── Web API (aiohttp) с логированием ──────────────────────────────────────────
 async def handle_options(request: web.Request) -> web.Response:
     return web.Response(headers=CORS_HEADERS)
 
 async def api_get_data(request: web.Request) -> web.Response:
-    cats  = db_get_categories()
+    log.info("GET /api/data")
+    cats = db_get_categories()
     prods = db_get_products()
     return web.json_response({"categories": cats, "products": prods}, headers=CORS_HEADERS)
 
@@ -313,24 +318,26 @@ async def api_save_category(request: web.Request) -> web.Response:
     if not _check_admin(request):
         return web.json_response({"error": "Unauthorized"}, status=403, headers=CORS_HEADERS)
     try:
-        data   = await request.json()
+        data = await request.json()
+        log.info("POST /api/admin/category: %s", data.get("name"))
         cat_id = data.get("id")
-        key    = str(data.get("key","")).strip()
-        name   = str(data.get("name","")).strip()
-        icon   = str(data.get("icon","📦")).strip()
-        image  = str(data.get("image","")).strip()
+        key = str(data.get("key","")).strip()
+        name = str(data.get("name","")).strip()
+        icon = str(data.get("icon","📦")).strip()
+        image = str(data.get("image","")).strip()
         if not key or not name:
-            return web.json_response({"error":"key and name required"},status=400,headers=CORS_HEADERS)
+            return web.json_response({"error":"key and name required"}, status=400, headers=CORS_HEADERS)
         new_id = db_save_category(key, name, icon, image, cat_id)
         return web.json_response({"ok": True, "id": new_id}, headers=CORS_HEADERS)
     except Exception as e:
-        log.error("api_save_category: %s", e)
+        log.exception("api_save_category error")
         return web.json_response({"error": str(e)}, status=500, headers=CORS_HEADERS)
 
 async def api_delete_category(request: web.Request) -> web.Response:
     if not _check_admin(request):
         return web.json_response({"error": "Unauthorized"}, status=403, headers=CORS_HEADERS)
     cat_id = int(request.match_info["id"])
+    log.info("DELETE /api/admin/category/%d", cat_id)
     db_delete_category(cat_id)
     return web.json_response({"ok": True}, headers=CORS_HEADERS)
 
@@ -341,9 +348,10 @@ async def api_save_product(request: web.Request) -> web.Response:
         d = await request.json()
         prod_id = d.get("id")
         name = str(d.get("name","")).strip()
+        log.info("POST /api/admin/product: %s (id=%s)", name, prod_id)
         if not name:
-            return web.json_response({"error":"name required"},status=400,headers=CORS_HEADERS)
-        # Принимаем variants с полями name, price, stock
+            return web.json_response({"error":"name required"}, status=400, headers=CORS_HEADERS)
+
         variants = d.get("variants", [])
         clean_variants = []
         for v in variants:
@@ -353,6 +361,10 @@ async def api_save_product(request: web.Request) -> web.Response:
                     "price": float(v.get("price", 0)),
                     "stock": int(v.get("stock", 0))
                 })
+
+        image_len = len(str(d.get("image", "")))
+        log.info("Изображение: %d символов", image_len)
+
         new_id = db_save_product(
             cat_key  = str(d.get("cat","")).strip(),
             name     = name,
@@ -363,15 +375,17 @@ async def api_save_product(request: web.Request) -> web.Response:
             variants = clean_variants,
             prod_id  = prod_id,
         )
+        log.info("Товар сохранён, id=%d", new_id)
         return web.json_response({"ok": True, "id": new_id}, headers=CORS_HEADERS)
     except Exception as e:
-        log.error("api_save_product: %s", e)
+        log.exception("api_save_product error")
         return web.json_response({"error": str(e)}, status=500, headers=CORS_HEADERS)
 
 async def api_delete_product(request: web.Request) -> web.Response:
     if not _check_admin(request):
         return web.json_response({"error": "Unauthorized"}, status=403, headers=CORS_HEADERS)
     prod_id = int(request.match_info["id"])
+    log.info("DELETE /api/admin/product/%d", prod_id)
     db_delete_product(prod_id)
     return web.json_response({"ok": True}, headers=CORS_HEADERS)
 
@@ -386,7 +400,7 @@ def create_web_app() -> web.Application:
     app.router.add_get("/", lambda r: web.Response(text="SMOKELAB bot is running ✓"))
     return app
 
-# ── Клавиатуры ────────────────────────────────────────────────────────────────
+# ── Клавиатуры и форматирование сообщений ────────────────────────────────────
 def kb_main() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="🛒 Открыть магазин", web_app=WebAppInfo(url=MINI_APP_URL))],
@@ -405,7 +419,6 @@ def kb_admin_order(order_num: str) -> InlineKeyboardMarkup:
         ],
     ])
 
-# ── Форматирование ────────────────────────────────────────────────────────────
 PAY_LABELS = {
     "cash":   "💵 Наличными",
     "card":   "💳 Банковская карта",
@@ -488,7 +501,7 @@ def admin_notification_text(order: dict) -> str:
         f"<b>Оплата:</b> {payment_label}"
     )
 
-# ── Хэндлеры ──────────────────────────────────────────────────────────────────
+# ── Хэндлеры бота ─────────────────────────────────────────────────────────────
 @dp.message(CommandStart())
 async def cmd_start(msg: Message) -> None:
     add_user(msg.from_user)
@@ -671,6 +684,7 @@ async def cmd_set_status(msg: Message) -> None:
     update_order_status(order_num, status)
     await msg.answer(f"✅ Статус заказа {order_num} → {STATUS_INFO[status]}")
 
+# ── Запуск бота и веб-сервера ────────────────────────────────────────────────
 async def main() -> None:
     init_db()
     await bot.set_my_commands([
@@ -683,7 +697,7 @@ async def main() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
-    log.info("SMOKELAB Bot запускается | ADMIN_ID=%s | PORT=%s", ADMIN_ID, PORT)
+    log.info("SMOKELAB Bot запущен | ADMIN_ID=%s | PORT=%s", ADMIN_ID, PORT)
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
