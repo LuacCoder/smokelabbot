@@ -148,7 +148,6 @@
   .img-tab-content { display: none; }
   .img-tab-content.active { display: block; }
 
-  /* Доставка */
   .delivery-cost-preview { margin-top: 8px; padding: 10px 12px; background: var(--surface); border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
   .delivery-cost-preview .dc-label { font-size: 12px; color: var(--text-muted); }
   .delivery-cost-preview .dc-value { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; background: var(--grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
@@ -216,6 +215,14 @@
   .admin-prod-img { width: 48px; height: 48px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: var(--grad-soft); display: flex; align-items: center; justify-content: center; font-size: 22px; border: 0.5px solid var(--border); }
   .admin-prod-img img { width: 100%; height: 100%; object-fit: cover; }
 
+  .variant-item { background: var(--surface); border-radius: 12px; padding: 10px; margin-bottom: 10px; }
+  .variant-header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .variant-name { flex: 2; }
+  .variant-price { flex: 1; }
+  .variant-stock { flex: 1; }
+  .variant-remove { color: var(--danger); cursor: pointer; font-size: 18px; padding: 0 6px; }
+  .add-variant-btn { width: 100%; margin-top: 10px; padding: 10px; border-radius: 12px; background: var(--surface2); border: 0.5px solid var(--border); color: var(--text); cursor: pointer; text-align: center; }
+
   .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(30,30,50,0.95); backdrop-filter: blur(10px); border: 0.5px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 500; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
   .toast.show { opacity: 1; }
   .empty { padding: 40px 20px; text-align: center; color: var(--text-muted); }
@@ -248,7 +255,7 @@
   </div>
 
   <div id="content">
-    <!-- Главная (без вкладки Популярное) -->
+    <!-- Главная -->
     <div class="page active" id="page-home">
       <div class="hero">
         <div class="hero-label">Добро пожаловать</div>
@@ -463,6 +470,14 @@
         </div>
       </div>
     </div>
+
+    <!-- Блок вариантов (цвет/вкус и остатки) -->
+    <div class="input-group">
+      <label class="input-label">🎨 Варианты (цвет/вкус) и остатки</label>
+      <div id="variantsContainer"></div>
+      <div class="add-variant-btn" onclick="addVariantField()">+ Добавить вариант</div>
+    </div>
+
     <button class="btn-primary" id="saveProdBtn" onclick="saveProduct()">Сохранить товар</button>
     <button class="btn-secondary" onclick="closeModal('addProductModal')">Отмена</button>
   </div>
@@ -503,7 +518,7 @@
         <div><div class="pay-label">🏪 Самовывоз</div><div class="pay-sub">Забрать из магазина (бесплатно)</div></div>
       </div>
 
-      <!-- Блок доставки с расчётом цены -->
+      <!-- Блок доставки с фиксированной ценой 5 BYN -->
       <div id="deliveryAddressBlock" style="margin-top:12px;">
         <div class="input-group">
           <label class="input-label">Адрес доставки</label>
@@ -512,16 +527,12 @@
             <button type="button" class="btn-secondary" style="width:auto;display:inline-block;padding:8px 12px;margin:0;" onclick="openMap()">🗺 Открыть в Яндекс.Картах</button>
           </div>
         </div>
-        <div class="input-group">
-          <label class="input-label">Расстояние от магазина (км)</label>
-          <input class="inp" type="number" id="deliveryKm" placeholder="0.0" min="0" step="0.1" oninput="updateDeliveryCost()">
-          <div class="delivery-cost-preview">
-            <div>
-              <div class="dc-label">Стоимость доставки</div>
-              <div class="dc-hint">1 км = 1 BYN · Минимум 3 BYN</div>
-            </div>
-            <div class="dc-value" id="deliveryCostPreview">3,00 BYN</div>
+        <div class="delivery-cost-preview">
+          <div>
+            <div class="dc-label">Стоимость доставки</div>
+            <div class="dc-hint">Фиксированная цена 5 BYN</div>
           </div>
+          <div class="dc-value" id="deliveryCostPreview">5,00 BYN</div>
         </div>
       </div>
 
@@ -534,13 +545,14 @@
       </div>
 
       <div class="input-group" style="margin-top:12px;"><label class="input-label">Имя получателя</label><input class="inp" id="coName" placeholder="Иван Иванов"></div>
-      <div class="input-group"><label class="input-label">Номер телефона</label><input class="inp" id="coPhone" placeholder="+375 XX XXX-XX-XX" type="tel"></div>
+      <div class="input-group"><label class="input-label">Номер телефона (необязательно)</label><input class="inp" id="coPhone" placeholder="+375 XX XXX-XX-XX" type="tel"></div>
       <div class="input-group"><label class="input-label">Комментарий (необязательно)</label><input class="inp" id="coComment" placeholder="Позвоните за 30 минут..."></div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; background:var(--surface); padding:8px; border-radius:8px;">ℹ️ Если у вас нет @username, напишите свой номер телефона для связи.</div>
       <button class="btn-primary" onclick="checkoutNext()">Далее → Оплата</button>
       <button class="btn-secondary" onclick="closeModal('checkoutModal')">Отмена</button>
     </div>
 
-    <!-- Шаг 2: Оплата -->
+    <!-- Шаг 2: Оплата (без криптовалюты) -->
     <div class="checkout-step" id="checkoutStep2">
       <div class="checkout-progress">
         <div class="progress-dot done"></div>
@@ -550,7 +562,6 @@
       <div class="modal-title">💳 Способ оплаты</div>
       <div class="pay-option selected" id="payOpt-cash"   onclick="selectPay('cash')">  <div class="pay-radio"></div><div><div class="pay-label">💵 Наличными при получении</div><div class="pay-sub">Оплата курьеру или в пункте выдачи</div></div></div>
       <div class="pay-option"          id="payOpt-card"   onclick="selectPay('card')">  <div class="pay-radio"></div><div><div class="pay-label">💳 Банковская карта</div><div class="pay-sub">Visa, Mastercard, Мир</div></div></div>
-      <div class="pay-option"          id="payOpt-crypto" onclick="selectPay('crypto')"><div class="pay-radio"></div><div><div class="pay-label">₿ Криптовалюта</div><div class="pay-sub">USDT, BTC, ETH</div></div></div>
       <div style="margin-top:16px;"><div class="input-label" style="margin-bottom:8px;">Ваш заказ:</div><div class="checkout-summary" id="checkoutSummary"></div></div>
 
       <!-- Поле для чека -->
@@ -610,8 +621,8 @@
 <script>
 // ─── Конфигурация ─────────────────────────────────────────────────────────────
 const ADMIN_ID = 8160958113;
-// ↓ Вставь сюда URL твоего Render приложения после деплоя
 const API_URL = 'https://smokelabbot.onrender.com';
+const DELIVERY_FIXED_COST = 5.0;
 
 // ─── Состояние ────────────────────────────────────────────────────────────────
 let currentDetailProduct = null;
@@ -625,6 +636,7 @@ let currentImgTab        = 'upload';
 let uploadedImageBase64  = '';
 let currentCatImgTab     = 'upload';
 let uploadedCatImageBase64 = '';
+let currentVariants = []; // для редактирования товара: массив { name, price, stock }
 
 // Данные из API
 let categories = [];
@@ -667,7 +679,6 @@ async function loadData() {
     }));
   } catch(e) {
     console.warn('API недоступен, данные пустые:', e);
-    // fallback — пустые массивы (бот ещё не запущен)
     if (!categories.length) categories = [
       { id:1, key:'vapes',       name:'Вейпы',     icon:'💨', image:'' },
       { id:2, key:'liquids',     name:'Жидкости',  icon:'🧪', image:'' },
@@ -824,9 +835,9 @@ function addToCartFromDetail() {
   if (p.variants && p.variants.length > 0) {
     document.getElementById('variantTitle').textContent = p.name;
     document.getElementById('variantList').innerHTML = p.variants.map(v =>
-      `<div class="pay-option" onclick="addToCartWithVariant(${p.id},'${v.name}',${v.price})">
+      `<div class="pay-option" onclick="addToCartWithVariant(${p.id},'${v.name}',${v.price},${v.stock})">
         <div class="pay-radio"></div>
-        <div><div class="pay-label">${v.name}</div><div class="pay-sub">${formatPrice(v.price)}</div></div>
+        <div><div class="pay-label">${v.name}</div><div class="pay-sub">${formatPrice(v.price)} · Остаток: ${v.stock} шт.</div></div>
       </div>`
     ).join('');
     document.getElementById('variantModal').classList.add('show');
@@ -836,7 +847,8 @@ function addToCartFromDetail() {
 }
 
 // ─── Корзина ──────────────────────────────────────────────────────────────────
-function addToCartWithVariant(id, variant, price) {
+function addToCartWithVariant(id, variant, price, stock) {
+  if (stock <= 0) { showToast('❌ Данный вариант закончился'); return; }
   const key = `${id}_${variant}`;
   cart[key] = (cart[key] || 0) + 1;
   if (!cart._details) cart._details = {};
@@ -896,21 +908,9 @@ function changeQty(key, delta) {
   updateCartCount(); renderCart();
 }
 
-// ─── Доставка: расчёт стоимости ───────────────────────────────────────────────
-function updateDeliveryCost() {
-  const km  = parseFloat(document.getElementById('deliveryKm').value) || 0;
-  const cost = Math.max(3, km * 1);
-  document.getElementById('deliveryCostPreview').textContent = formatPrice(cost);
-}
-
+// ─── Доставка: фиксированная стоимость ───────────────────────────────────────
 function getDeliveryCost() {
-  if (selectedDelivery === 'pickup') return 0;
-  const km = parseFloat(document.getElementById('deliveryKm')?.value) || 0;
-  return Math.max(3, km * 1);
-}
-
-function getDeliveryKm() {
-  return parseFloat(document.getElementById('deliveryKm')?.value) || 0;
+  return selectedDelivery === 'delivery' ? DELIVERY_FIXED_COST : 0;
 }
 
 // ─── Оформление заказа ────────────────────────────────────────────────────────
@@ -918,8 +918,6 @@ function openCheckout() {
   document.getElementById('coName').value    = profile.name    || '';
   document.getElementById('coPhone').value   = profile.phone   || '';
   document.getElementById('coAddress').value = profile.address || 'г. Витебск, ';
-  document.getElementById('deliveryKm').value = '';
-  document.getElementById('deliveryCostPreview').textContent = '3,00 BYN';
   document.getElementById('receiptNote').value = '';
   selectedDelivery = 'delivery';
   selectDelivery('delivery');
@@ -927,6 +925,7 @@ function openCheckout() {
   document.querySelectorAll('.pay-option[id^="payOpt-"]').forEach(el => el.classList.remove('selected'));
   const cashOpt = document.getElementById('payOpt-cash');
   if (cashOpt) cashOpt.classList.add('selected');
+  document.getElementById('deliveryCostPreview').textContent = formatPrice(DELIVERY_FIXED_COST);
   setCheckoutStep(1);
   document.getElementById('checkoutModal').classList.add('show');
 }
@@ -950,6 +949,7 @@ function selectDelivery(method) {
     const inp = document.getElementById('coAddress');
     if (inp && !inp.value.trim()) inp.value = 'г. Витебск, ';
   }
+  document.getElementById('deliveryCostPreview').textContent = formatPrice(getDeliveryCost());
 }
 
 function prefixCity() {
@@ -973,23 +973,20 @@ function openPickupMap() {
 
 function checkoutNext() {
   const name    = document.getElementById('coName').value.trim();
-  const phone   = document.getElementById('coPhone').value.trim();
   const address = selectedDelivery === 'pickup'
-    ? 'Самовывоз, г. Витебск, ул. Генерала Ивановского, д. 34'
+    ? 'г. Витебск, ул. Генерала Ивановского, д. 34'
     : document.getElementById('coAddress').value.trim();
 
-  if (!name || !phone || (selectedDelivery === 'delivery' && !address)) {
-    showToast('Заполните все обязательные поля'); return;
+  if (!name || (selectedDelivery === 'delivery' && !address)) {
+    showToast('Заполните обязательные поля (имя и адрес)'); return;
   }
 
-  const deliveryCost = getDeliveryCost();
-  const deliveryKm   = getDeliveryKm();
-
   checkoutData = {
-    name, phone, address,
-    comment:     document.getElementById('coComment').value.trim(),
-    delivery:    selectedDelivery,
-    deliveryKm,
+    name,
+    phone:     document.getElementById('coPhone').value.trim(),
+    address,
+    comment:   document.getElementById('coComment').value.trim(),
+    delivery:  selectedDelivery,
   };
 
   let summaryHTML = '', total = 0;
@@ -1003,7 +1000,8 @@ function checkoutNext() {
     </div>`;
   });
 
-  summaryHTML += `<div class="checkout-summary-item"><span>Доставка ${deliveryKm ? '(' + deliveryKm + ' км)' : ''}</span><span>${formatPrice(deliveryCost)}</span></div>`;
+  const deliveryCost = getDeliveryCost();
+  summaryHTML += `<div class="checkout-summary-item"><span>Доставка</span><span>${formatPrice(deliveryCost)}</span></div>`;
   summaryHTML += `<div class="checkout-summary-total">
     <span>Итого</span>
     <span style="background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${formatPrice(total + deliveryCost)}</span>
@@ -1231,7 +1229,7 @@ function clearUploadedImageCat() {
   document.getElementById('imgFileInputCat').value = '';
 }
 
-// ─── Товары CRUD ──────────────────────────────────────────────────────────────
+// ─── Товары CRUD с вариантами и остатками ─────────────────────────────────────
 function populateCatSelect() {
   const sel = document.getElementById('prodCat'); if (!sel) return;
   sel.innerHTML = categories.map(cat => `<option value="${cat.key}">${cat.icon||'📦'} ${cat.name}</option>`).join('');
@@ -1239,6 +1237,8 @@ function populateCatSelect() {
 
 function openAddProduct() {
   populateCatSelect();
+  currentVariants = [];
+  renderVariantsUI();
   document.getElementById('addProdTitle').textContent = 'Новый товар';
   document.getElementById('editProdId').value = '';
   ['prodName','prodDesc','prodEmoji','prodImgUrl'].forEach(id => document.getElementById(id).value = '');
@@ -1259,6 +1259,8 @@ function openEditProduct(id) {
   document.getElementById('prodPrice').value  = p.price;
   document.getElementById('prodCat').value    = p.cat || p.cat_key || '';
   document.getElementById('prodEmoji').value  = p.emoji || '';
+  currentVariants = p.variants ? [...p.variants] : [];
+  renderVariantsUI();
   clearUploadedImage();
   if (p.image && p.image.startsWith('data:')) {
     uploadedImageBase64 = p.image;
@@ -1281,6 +1283,59 @@ function openEditProduct(id) {
   document.getElementById('addProductModal').classList.add('show');
 }
 
+function renderVariantsUI() {
+  const container = document.getElementById('variantsContainer');
+  if (!container) return;
+  if (!currentVariants.length) {
+    container.innerHTML = '<div class="empty-text" style="padding:8px; text-align:center;">Нет вариантов. Добавьте ниже.</div>';
+    return;
+  }
+  container.innerHTML = currentVariants.map((v, idx) => `
+    <div class="variant-item">
+      <div class="variant-header">
+        <input class="inp variant-name" style="flex:2;" placeholder="Название (цвет/вкус)" value="${escapeHtml(v.name)}">
+        <input class="inp variant-price" style="flex:1;" type="number" step="0.01" placeholder="Цена" value="${v.price}">
+        <input class="inp variant-stock" style="flex:1;" type="number" step="1" placeholder="Остаток" value="${v.stock}">
+        <div class="variant-remove" onclick="removeVariant(${idx})">✖</div>
+      </div>
+    </div>
+  `).join('');
+  // Привязываем обработчики изменений
+  document.querySelectorAll('.variant-item').forEach((item, idx) => {
+    const nameInput = item.querySelector('.variant-name');
+    const priceInput = item.querySelector('.variant-price');
+    const stockInput = item.querySelector('.variant-stock');
+    const update = () => {
+      currentVariants[idx].name = nameInput.value;
+      currentVariants[idx].price = parseFloat(priceInput.value) || 0;
+      currentVariants[idx].stock = parseInt(stockInput.value) || 0;
+    };
+    nameInput.addEventListener('input', update);
+    priceInput.addEventListener('input', update);
+    stockInput.addEventListener('input', update);
+  });
+}
+
+function addVariantField() {
+  currentVariants.push({ name: '', price: 0, stock: 0 });
+  renderVariantsUI();
+}
+
+function removeVariant(idx) {
+  currentVariants.splice(idx, 1);
+  renderVariantsUI();
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
+
 async function saveProduct() {
   const name  = document.getElementById('prodName').value.trim();
   const desc  = document.getElementById('prodDesc').value.trim();
@@ -1293,9 +1348,12 @@ async function saveProduct() {
   else if (currentImgTab === 'url') image = document.getElementById('prodImgUrl').value.trim();
 
   const editId = document.getElementById('editProdId').value;
-  // Сохраняем существующие варианты если редактируем
-  const existingProduct = editId ? products.find(p => p.id == editId) : null;
-  const variants = existingProduct?.variants || [];
+  // Собираем варианты из UI
+  const variants = currentVariants.filter(v => v.name.trim() !== '').map(v => ({
+    name: v.name.trim(),
+    price: parseFloat(v.price) || price, // если цена не указана, берем основную цену товара
+    stock: parseInt(v.stock) || 0
+  }));
 
   const btn = document.getElementById('saveProdBtn');
   btn.disabled = true; btn.textContent = 'Сохранение...';
@@ -1405,9 +1463,9 @@ function initAdminVisibility() {
   if (!navAdmin) return;
   const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
   if (userId && Number(userId) === ADMIN_ID) {
-    navAdmin.style.display = '';   // показываем
+    navAdmin.style.display = '';
   } else {
-    navAdmin.style.display = 'none';  // скрываем для всех остальных
+    navAdmin.style.display = 'none';
   }
 }
 
@@ -1426,19 +1484,6 @@ if (window.Telegram?.WebApp) {
   initAdminVisibility();
 }
 
-// ─── Ожидание Telegram user ──────────────────────────────────────────────
-async function waitForTelegramUser(maxAttempts = 30) {
-  // Ждём появления tg.initDataUnsafe.user с повторами
-  for (let i = 0; i < maxAttempts; i++) {
-    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (user && user.id) return user;
-    await new Promise(r => setTimeout(r, 200));
-  }
-  // Если не удалось получить за maxAttempts, пробуем последний раз
-  return window.Telegram?.WebApp?.initDataUnsafe?.user || null;
-}
-
-// ─── Ожидание Telegram user ──────────────────────────────────────────────
 async function waitForTelegramUser(maxAttempts = 30) {
   for (let i = 0; i < maxAttempts; i++) {
     const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -1448,14 +1493,12 @@ async function waitForTelegramUser(maxAttempts = 30) {
   return window.Telegram?.WebApp?.initDataUnsafe?.user || null;
 }
 
-// ─── Новая инициализация ─────────────────────────────────────────────────
 async function init() {
   try {
     await loadData();
   } catch(e) {
     console.warn('Загрузка данных не удалась:', e);
   }
-
   const tgUser = await waitForTelegramUser();
   if (tgUser) {
     renderProfile();
@@ -1463,7 +1506,6 @@ async function init() {
   } else {
     renderProfile();
   }
-
   document.getElementById('loading-overlay').style.display = 'none';
   renderHome();
 }
